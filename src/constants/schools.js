@@ -1,0 +1,17 @@
+export const SCHOOLS = [
+  "Columbia Business School (CBS)",
+  "Columbia College (CC)",
+  "School of Engineering (SEAS)",
+  "General Studies (GS)",
+  "Graduate School of Arts & Sciences (GSAS)",
+  "School of International & Public Affairs (SIPA)",
+  "Columbia Law School",
+  "Columbia Medical School",
+  "School of Professional Studies (SPS)",
+  "Teachers College",
+  "School of Social Work",
+  "Journalism School",
+  "School of the Arts (SOA)",
+  "Mailman School of Public Health",
+  "School of Nursing",
+];

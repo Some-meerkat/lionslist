@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LionsList — Columbia Student Marketplace</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #F9FAFB; color: #111827; }
+  input, select, textarea, button { font-family: inherit; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useRef, useCallback } = React;
+
+// ─── Constants ─────────────────────────────────────────────
+const C = {
+  blue: "#B9D9EB", dark: "#1D4F91", light: "#E8F4FD", white: "#FFF",
+  g50: "#F9FAFB", g100: "#F3F4F6", g200: "#E5E7EB", g300: "#D1D5DB",
+  g400: "#9CA3AF", g500: "#6B7280", g700: "#374151", g900: "#111827",
+  red: "#EF4444", green: "#22C55E", greenD: "#16A34A",
+};
+
+const SCHOOLS = [
+  "Columbia Business School (CBS)","Columbia College (CC)","School of Engineering (SEAS)",
+  "General Studies (GS)","Graduate School of Arts & Sciences (GSAS)",
+  "School of International & Public Affairs (SIPA)","Columbia Law School",
+  "Columbia Medical School","School of Professional Studies (SPS)","Teachers College",
+  "School of Social Work","Journalism School","School of the Arts (SOA)",
+  "Mailman School of Public Health","School of Nursing",
+];
+
+const CATEGORIES = [
+  {name:"Event Tickets",icon:"🎫"},{name:"Graduation Tickets",icon:"🎓"},
+  {name:"Furniture",icon:"🪑"},{name:"Electronics",icon:"💻"},
+  {name:"Apartment Subleases",icon:"🏠"},{name:"Apartments",icon:"🏢"},
+  {name:"Textbooks & Course Materials",icon:"📚"},{name:"Clothing & Accessories",icon:"👕"},
+  {name:"Kitchen & Appliances",icon:"🍳"},{name:"Bikes & Scooters",icon:"🚲"},
+  {name:"Dorm Essentials",icon:"🛏️"},{name:"Free Stuff",icon:"🎁"},
+  {name:"Tutoring & Services",icon:"📝"},{name:"Study Groups & Notes",icon:"📖"},
+  {name:"Sports & Fitness Equipment",icon:"⚽"},{name:"Musical Instruments",icon:"🎸"},
+  {name:"Jobs & Gigs",icon:"💼"},{name:"Travel & Rideshares",icon:"✈️"},
+];
+
+const uid = () => Math.random().toString(36).substr(2, 9);
+const abbr = (s) => { const m = s.match(/\(([^)]+)\)/); return m ? m[1] : s; };
+
+// ─── Reusable Components ───────────────────────────────────
+const btnBase = {
+  padding:"10px 20px", borderRadius:8, border:"none", cursor:"pointer",
+  fontWeight:600, fontSize:14, transition:"all 0.2s", display:"inline-flex",
+  alignItems:"center", justifyContent:"center", gap:6,
+};
+
+function Btn({children, variant="primary", small, full, style, ...p}) {
+  const v = {
+    primary: {background:C.dark, color:C.white},
+    secondary: {background:C.white, color:C.dark, border:`2px solid ${C.dark}`},
+    danger: {background:C.red, color:C.white},
+    success: {background:C.greenD, color:C.white},
+    ghost: {background:"transparent", color:C.dark, border:"none"},
+    whatsapp: {background:"#25D366", color:C.white},
+  };
+  return <button style={{...btnBase,...(v[variant]||v.primary),...(small?{padding:"6px 14px",fontSize:13}:{}),
+    ...(full?{width:"100%"}:{}), ...style}} {...p}>{children}</button>;
+}
+
+function Field({label, error, children}) {
+  return <div style={{marginBottom:16}}>
+    {label && <label style={{display:"block",fontSize:13,fontWeight:600,color:C.g700,marginBottom:4}}>{label}</label>}
+    {children}
+    {error && <span style={{color:C.red,fontSize:12,marginTop:2,display:"block"}}>{error}</span>}
+  </div>;
+}
+
+function Input({label, error, style, ...p}) {
+  return <Field label={label} error={error}>
+    <input style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${error?C.red:C.g300}`,
+      fontSize:14,outline:"none",boxSizing:"border-box",...style}} {...p} />
+  </Field>;
+}
+
+function TextArea({label, style, ...p}) {
+  return <Field label={label}>
+    <textarea style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${C.g300}`,
+      fontSize:14,outline:"none",boxSizing:"border-box",minHeight:80,resize:"vertical",...style}} {...p} />
+  </Field>;
+}
+
+function Sel({label, children, ...p}) {
+  return <Field label={label}>
+    <select style={{width:"100%",padding:"10px 14px",borderRadius:8,border:`1px solid ${C.g300}`,
+      fontSize:14,outline:"none",boxSizing:"border-box",background:C.white}} {...p}>{children}</select>
+  </Field>;
+}
+
+function Card({children, style, onClick, hover}) {
+  const [h, setH] = useState(false);
+  return <div onClick={onClick}
+    onMouseEnter={hover?()=>setH(true):undefined}
+    onMouseLeave={hover?()=>setH(false):undefined}
+    style={{background:C.white,borderRadius:12,padding:24,boxShadow:h?"0 4px 12px rgba(0,0,0,0.12)":"0 1px 3px rgba(0,0,0,0.08)",
+      border:`1px solid ${C.g200}`,transition:"all 0.2s",transform:h?"translateY(-2px)":"none",
+      cursor:onClick?"pointer":"default",...style}}>{children}</div>;
+}
+
+function Badge({children, color="blue"}) {
+  const colors = {blue:{bg:C.light,fg:C.dark},green:{bg:"#DCFCE7",fg:C.greenD},red:{bg:"#FEE2E2",fg:C.red},gray:{bg:C.g100,fg:C.g500}};
+  const c = colors[color]||colors.blue;
+  return <span style={{display:"inline-block",padding:"2px 8px",borderRadius:99,fontSize:11,fontWeight:600,background:c.bg,color:c.fg}}>{children}</span>;
+}
+
+// ─── Register Page ─────────────────────────────────────────
+function RegisterPage({onRegister}) {
+  const [f, setF] = useState({name:"",email:"",gradYear:"",whatsapp:"",school:""});
+  const [e, setE] = useState({});
+  const u = (k,v) => setF(p=>({...p,[k]:v}));
+
+  const submit = (ev) => {
+    ev.preventDefault();
+    const err = {};
+    if(!f.name.trim()) err.name="Name is required";
+    if(!f.email.endsWith("@columbia.edu")) err.email="Must be a @columbia.edu email";
+    if(!f.gradYear||f.gradYear<2020||f.gradYear>2035) err.gradYear="Enter a valid year";
+    if(!f.whatsapp.trim()) err.whatsapp="WhatsApp number is required";
+    if(!f.school) err.school="Please select your school";
+    setE(err);
+    if(Object.keys(err).length===0) onRegister(f);
+  };
+
+  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.dark} 0%,#2563EB 100%)`,
+    display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <Card style={{maxWidth:440,width:"100%"}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:32,marginBottom:8}}>🦁</div>
+        <h1 style={{fontSize:28,fontWeight:700,color:C.dark,margin:0}}>LionsList</h1>
+        <p style={{color:C.g500,fontSize:14,marginTop:4}}>The Columbia Student Marketplace</p>
+      </div>
+      <form onSubmit={submit}>
+        <Input label="Full Name" placeholder="John Doe" value={f.name} onChange={e=>u("name",e.target.value)} error={e.name} />
+        <Input label="Columbia Email" type="email" placeholder="jd1234@columbia.edu" value={f.email} onChange={e=>u("email",e.target.value)} error={e.email} />
+        <Sel label="School" value={f.school} onChange={e=>u("school",e.target.value)}>
+          <option value="">Select your school...</option>
+          {SCHOOLS.map(s=><option key={s} value={s}>{s}</option>)}
+        </Sel>
+        {e.school && <span style={{color:C.red,fontSize:12,marginTop:-12,display:"block"}}>{e.school}</span>}
+        <Input label="Graduation Year" type="number" placeholder="2026" value={f.gradYear} onChange={e=>u("gradYear",e.target.value)} error={e.gradYear} />
+        <Input label="WhatsApp Number (with country code)" placeholder="+1 (234) 567-8900" value={f.whatsapp} onChange={e=>u("whatsapp",e.target.value)} error={e.whatsapp} />
+        <Btn type="submit" full style={{padding:"12px 0",fontSize:16,marginTop:8}}>Continue</Btn>
+      </form>
+    </Card>
+  </div>;
+}
+
+// ─── OTP Page ──────────────────────────────────────────────
+function OTPPage({email, onVerify, onBack}) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const verify = () => { if(code==="123456") onVerify(); else setError("Invalid code. Hint: use 123456"); };
+
+  return <div style={{minHeight:"100vh",background:`linear-gradient(135deg,${C.dark} 0%,#2563EB 100%)`,
+    display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <Card style={{maxWidth:400,width:"100%",textAlign:"center"}}>
+      <div style={{fontSize:48,marginBottom:16}}>📧</div>
+      <h2 style={{color:C.dark,marginBottom:8}}>Verify Your Email</h2>
+      <p style={{color:C.g500,fontSize:14,marginBottom:24}}>We sent a 6-digit code to <strong>{email}</strong></p>
+      <Input placeholder="Enter 6-digit code" value={code}
+        onChange={e=>{setCode(e.target.value);setError("");}} error={error}
+        style={{textAlign:"center",fontSize:20,letterSpacing:8}} />
+      <p style={{color:C.g400,fontSize:12,marginBottom:16}}>Demo hint: the code is <strong>123456</strong></p>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="secondary" onClick={onBack} full>Back</Btn>
+        <Btn onClick={verify} full>Verify</Btn>
+      </div>
+    </Card>
+  </div>;
+}
+
+// ─── NavBar ────────────────────────────────────────────────
+function NavBar({user, onLogout, onHome}) {
+  return <div style={{background:C.dark,color:C.white,padding:"12px 24px",display:"flex",
+    alignItems:"center",justifyContent:"space-between",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",
+    position:"sticky",top:0,zIndex:100}}>
+    <div style={{fontSize:22,fontWeight:700,letterSpacing:"-0.5px",cursor:"pointer"}} onClick={onHome}>🦁 LionsList</div>
+    <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <span style={{fontSize:14,opacity:0.9}}>{user.name} · {abbr(user.school)}</span>
+      <Btn small onClick={onLogout} style={{background:"rgba(255,255,255,0.15)",color:C.white,border:"1px solid rgba(255,255,255,0.3)"}}>Log Out</Btn>
+    </div>
+  </div>;
+}
+
+// ─── Marketplace Card (shared) ─────────────────────────────
+function MktCard({m, onClick}) {
+  const expired = m.expiryDate && new Date(m.expiryDate) < new Date();
+  return <Card hover onClick={onClick} style={{padding:16}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}>
+      <h3 style={{margin:0,fontSize:16,color:C.dark}}>{m.name}</h3>
+      {expired ? <Badge color="red">Archived</Badge> : <Badge color="green">Active</Badge>}
+    </div>
+    <p style={{color:C.g500,fontSize:13,margin:"8px 0",lineHeight:1.4}}>
+      {m.description.length>80 ? m.description.slice(0,80)+"..." : m.description}
+    </p>
+    <div style={{display:"flex",gap:12,fontSize:12,color:C.g400,flexWrap:"wrap"}}>
+      <span>{m.pricingMode==="free"?"Free items only":m.pricingMode==="max"?`Max $${m.priceMax}`:"Any price"}</span>
+      <span>•</span>
+      <span>{(m.listings||[]).length} listings</span>
+      {m.expiryDate && <><span>•</span><span>Expires {new Date(m.expiryDate).toLocaleDateString()}</span></>}
+    </div>
+    {m.schoolRestrictions && m.schoolRestrictions.length>0 && (
+      <div style={{marginTop:8,display:"flex",gap:4,flexWrap:"wrap"}}>
+        {m.schoolRestrictions.map(s=><Badge key={s}>{abbr(s)}</Badge>)}
+      </div>
+    )}
+  </Card>;
+}
+
+// ─── Home Page ─────────────────────────────────────────────
+function HomePage({user, marketplaces, onNavigate}) {
+  const [search, setSearch] = useState("");
+  const [joinLink, setJoinLink] = useState("");
+
+  const visible = marketplaces.filter(m => {
+    if(m.schoolRestrictions && m.schoolRestrictions.length>0) {
+      if(!m.schoolRestrictions.includes(user.school)) return false;
+    }
+    return true;
+  });
+
+  const filtered = search.trim()
+    ? visible.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.description.toLowerCase().includes(search.toLowerCase()))
+    : [];
+
+  const myCreated = marketplaces.filter(m=>m.creatorId===user.id);
+  const myParticipated = marketplaces.filter(m=>m.creatorId!==user.id && (m.listings||[]).some(l=>l.sellerId===user.id));
+  const isExpired = (m) => m.expiryDate && new Date(m.expiryDate)<new Date();
+
+  const handleJoin = () => {
+    const id = joinLink.trim().split("/").pop().split("?")[0];
+    const found = marketplaces.find(m=>m.id===id);
+    if(found) onNavigate("marketplace",found.id);
+    else alert("Marketplace not found. Check your link/ID.");
+  };
+
+  return <div style={{maxWidth:960,margin:"0 auto",padding:"24px 16px"}}>
+    {/* Hero */}
+    <div style={{background:`linear-gradient(135deg,${C.dark} 0%,#2563EB 100%)`,color:C.white,
+      padding:"48px 24px",textAlign:"center",borderRadius:16,marginBottom:32}}>
+      <h1 style={{fontSize:36,fontWeight:700,margin:0}}>Welcome to LionsList, {user.name.split(" ")[0]}!</h1>
+      <p style={{fontSize:16,opacity:0.9,marginTop:8}}>Buy, sell, and trade with fellow Columbia Lions</p>
+      <div style={{display:"flex",gap:12,justifyContent:"center",marginTop:24}}>
+        <Btn onClick={()=>onNavigate("createMarketplace")}
+          style={{background:C.white,color:C.dark,fontWeight:700}}>+ Create Marketplace</Btn>
+      </div>
+    </div>
+
+    {/* Join via link */}
+    <Card style={{marginBottom:24,padding:16}}>
+      <h3 style={{margin:"0 0 12px",fontSize:15,color:C.g700}}>Join a Marketplace via Link</h3>
+      <div style={{display:"flex",gap:8}}>
+        <input style={{flex:1,padding:"10px 14px",borderRadius:8,border:`1px solid ${C.g300}`,fontSize:14,outline:"none"}}
+          placeholder="Paste marketplace link or ID..." value={joinLink} onChange={e=>setJoinLink(e.target.value)} />
+        <Btn small onClick={handleJoin}>Join</Btn>
+      </div>
+    </Card>
+
+    {/* Search */}
+    <div style={{marginBottom:24}}>
+      <input style={{width:"100%",padding:"14px 18px",fontSize:16,borderRadius:12,border:`1px solid ${C.g300}`,
+        outline:"none",boxShadow:"0 2px 8px rgba(0,0,0,0.06)",boxSizing:"border-box"}}
+        placeholder="Search marketplaces..." value={search} onChange={e=>setSearch(e.target.value)} />
+      {search.trim() && <div style={{marginTop:12}}>
+        {filtered.length===0
+          ? <p style={{color:C.g400,textAlign:"center",padding:24}}>No marketplaces found for "{search}"</p>
+          : <div style={{display:"grid",gap:12}}>{filtered.map(m=><MktCard key={m.id} m={m} onClick={()=>onNavigate("marketplace",m.id)} />)}</div>}
+      </div>}
+    </div>
+
+    {/* Categories */}
+    {!search.trim() && <>
+      <h2 style={{fontSize:18,fontWeight:700,marginBottom:16}}>Browse by Category</h2>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
+        {CATEGORIES.map(c=>(
+          <div key={c.name} onClick={()=>setSearch(c.name)}
+            style={{background:C.white,border:`1px solid ${C.g200}`,borderRadius:12,padding:"16px 12px",
+              textAlign:"center",cursor:"pointer",transition:"all 0.2s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.background=C.light;}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.g200;e.currentTarget.style.background=C.white;}}>
+            <div style={{fontSize:28,marginBottom:6}}>{c.icon}</div>
+            <div style={{fontSize:12,fontWeight:600,color:C.g700}}>{c.name}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* My Created */}
+      {myCreated.length>0 && <div style={{marginTop:32}}>
+        <h2 style={{fontSize:18,fontWeight:700,marginBottom:16}}>My Marketplaces</h2>
+        <div style={{display:"grid",gap:12}}>{myCreated.map(m=><MktCard key={m.id} m={m} onClick={()=>onNavigate("marketplace",m.id)} />)}</div>
+      </div>}
+
+      {/* Participated */}
+      {myParticipated.length>0 && <div style={{marginTop:32}}>
+        <h2 style={{fontSize:18,fontWeight:700,marginBottom:16}}>Marketplaces I've Participated In</h2>
+        <div style={{display:"grid",gap:12}}>{myParticipated.map(m=><MktCard key={m.id} m={m} onClick={()=>onNavigate("marketplace",m.id)} />)}</div>
+      </div>}
+
+      {/* All Active */}
+      <div style={{marginTop:32}}>
+        <h2 style={{fontSize:18,fontWeight:700,marginBottom:16}}>All Active Marketplaces</h2>
+        {visible.filter(m=>!isExpired(m)).length===0
+          ? <Card style={{textAlign:"center",padding:48,color:C.g400}}>
+              <div style={{fontSize:48,marginBottom:12}}>🏪</div>
+              <p>No active marketplaces yet. Be the first to create one!</p>
+            </Card>
+          : <div style={{display:"grid",gap:12}}>
+              {visible.filter(m=>!isExpired(m)).map(m=><MktCard key={m.id} m={m} onClick={()=>onNavigate("marketplace",m.id)} />)}
+            </div>}
+      </div>
+    </>}
+  </div>;
+}
+
+// ─── Create Marketplace ────────────────────────────────────
+function CreateMarketplacePage({user, onSave, onBack}) {
+  const [f, setF] = useState({name:"",description:"",pricingMode:"any",priceMax:"",allowPictures:true,expiryDate:"",schoolRestrictions:[]});
+  const u = (k,v) => setF(p=>({...p,[k]:v}));
+
+  const toggleSchool = (s) => setF(p=>({...p,
+    schoolRestrictions: p.schoolRestrictions.includes(s) ? p.schoolRestrictions.filter(x=>x!==s) : [...p.schoolRestrictions,s]
+  }));
+
+  const submit = (ev) => {
+    ev.preventDefault();
+    if(!f.name.trim()||!f.description.trim()) { alert("Please fill in the name and description."); return; }
+    if(f.pricingMode==="max"&&(!f.priceMax||Number(f.priceMax)<=0)) { alert("Please enter a valid price maximum."); return; }
+    onSave({
+      id:uid(), ...f, priceMax:f.pricingMode==="max"?Number(f.priceMax):null,
+      creatorId:user.id, creatorName:user.name, createdAt:new Date().toISOString(), listings:[]
+    });
+  };
+
+  return <div style={{maxWidth:960,margin:"0 auto",padding:"24px 16px"}}>
+    <button onClick={onBack} style={{background:"none",border:"none",color:C.dark,cursor:"pointer",fontWeight:600,fontSize:14,padding:0,marginBottom:16}}>← Back to Home</button>
+    <Card style={{maxWidth:600,margin:"0 auto"}}>
+      <h2 style={{color:C.dark,margin:"0 0 24px"}}>Create a Marketplace</h2>
+      <form onSubmit={submit}>
+        <Input label="Marketplace Name" placeholder="e.g., CBS Spring 2026 Graduation Tickets" value={f.name} onChange={e=>u("name",e.target.value)} />
+        <TextArea label="Description" placeholder="What is this marketplace for?" value={f.description} onChange={e=>u("description",e.target.value)} />
+
+        <Field label="Pricing Mode">
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[{v:"free",l:"Free Only"},{v:"any",l:"Any Price"},{v:"max",l:"Price Maximum"}].map(o=>(
+              <button key={o.v} type="button" onClick={()=>u("pricingMode",o.v)}
+                style={{padding:"8px 16px",borderRadius:8,border:`2px solid ${f.pricingMode===o.v?C.dark:C.g200}`,
+                  background:f.pricingMode===o.v?C.light:C.white,color:f.pricingMode===o.v?C.dark:C.g500,
+                  cursor:"pointer",fontWeight:600,fontSize:13}}>{o.l}</button>
+            ))}
+          </div>
+        </Field>
+
+        {f.pricingMode==="max" && <Input label="Maximum Price ($)" type="number" placeholder="50" value={f.priceMax} onChange={e=>u("priceMax",e.target.value)} />}
+
+        <div style={{marginBottom:16,display:"flex",alignItems:"center",gap:12}}>
+          <label style={{fontSize:13,fontWeight:600,color:C.g700,flex:1}}>Allow Pictures on Listings</label>
+          <div onClick={()=>u("allowPictures",!f.allowPictures)}
+            style={{width:48,height:26,borderRadius:13,background:f.allowPictures?C.green:C.g300,cursor:"pointer",position:"relative",transition:"background 0.2s"}}>
+            <div style={{width:22,height:22,borderRadius:"50%",background:C.white,position:"absolute",top:2,
+              left:f.allowPictures?24:2,transition:"left 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.2)"}} />
+          </div>
+        </div>
+
+        <Input label="Expiry Date" type="date" value={f.expiryDate} onChange={e=>u("expiryDate",e.target.value)} />
+
+        <Field label="Restrict to Specific Schools (optional)">
+          <p style={{color:C.g400,fontSize:12,margin:"0 0 8px"}}>Leave unselected to allow all Columbia students</p>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {SCHOOLS.map(s=>{
+              const sel = f.schoolRestrictions.includes(s);
+              return <button key={s} type="button" onClick={()=>toggleSchool(s)}
+                style={{padding:"6px 12px",borderRadius:99,border:`1.5px solid ${sel?C.dark:C.g200}`,
+                  background:sel?C.light:C.white,color:sel?C.dark:C.g500,cursor:"pointer",fontSize:12,fontWeight:600}}>
+                {abbr(s)}
+              </button>;
+            })}
+          </div>
+        </Field>
+
+        <Btn type="submit" full style={{padding:"12px 0",fontSize:16}}>Launch Marketplace 🚀</Btn>
+      </form>
+    </Card>
+  </div>;
+}
+
+// ─── Create Listing Form ───────────────────────────────────
+function CreateListingForm({marketplace, user, onSave, onCancel}) {
+  const [f, setF] = useState({name:"",category:CATEGORIES[0].name,quantity:1,price:"",note:"",images:[]});
+  const fileRef = useRef(null);
+  const u = (k,v) => setF(p=>({...p,[k]:v}));
+
+  const handleImages = (ev) => {
+    const files = Array.from(ev.target.files).slice(0,3-f.images.length);
+    files.forEach(file=>{
+      const reader = new FileReader();
+      reader.onload = (e) => setF(p=>({...p, images:[...p.images,e.target.result].slice(0,3)}));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImg = (i) => setF(p=>({...p,images:p.images.filter((_,idx)=>idx!==i)}));
+
+  const submit = (ev) => {
+    ev.preventDefault();
+    if(!f.name.trim()) { alert("Please enter an item name."); return; }
+    if(marketplace.pricingMode!=="free") {
+      if(f.price===""||Number(f.price)<0) { alert("Please enter a valid price."); return; }
+      if(marketplace.pricingMode==="max"&&Number(f.price)>marketplace.priceMax) { alert(`Price cannot exceed $${marketplace.priceMax}`); return; }
+    }
+    onSave({
+      id:uid(), ...f, price:marketplace.pricingMode==="free"?0:Number(f.price),
+      quantity:Number(f.quantity)||1, sellerId:user.id, sellerName:user.name,
+      createdAt:new Date().toISOString(), sold:false, buyers:[]
+    });
+  };
+
+  return <Card style={{marginBottom:24}}>
+    <h3 style={{margin:"0 0 16px",color:C.dark}}>Create New Listing</h3>
+    <form onSubmit={submit}>
+      <Input label="Item Name" placeholder="e.g., TI-84 Calculator" value={f.name} onChange={e=>u("name",e.target.value)} />
+      <Sel label="Category" value={f.category} onChange={e=>u("category",e.target.value)}>
+        {CATEGORIES.map(c=><option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
+      </Sel>
+      <Input label="Quantity" type="number" min="1" value={f.quantity} onChange={e=>u("quantity",e.target.value)} />
+      {marketplace.pricingMode!=="free" && (
+        <Input label={`Price ($)${marketplace.pricingMode==="max"?` — Max: $${marketplace.priceMax}`:""}`}
+          type="number" min="0" step="0.01" placeholder="0.00" value={f.price} onChange={e=>u("price",e.target.value)} />
+      )}
+      <TextArea label="Note (optional)" placeholder="Any details about the item..." value={f.note} onChange={e=>u("note",e.target.value)} />
+
+      {marketplace.allowPictures && <Field label={`Pictures (${f.images.length}/3)`}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          {f.images.map((img,i)=>(
+            <div key={i} style={{width:80,height:80,borderRadius:8,overflow:"hidden",position:"relative"}}>
+              <img src={img} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} />
+              <button type="button" onClick={()=>removeImg(i)}
+                style={{position:"absolute",top:2,right:2,width:20,height:20,borderRadius:"50%",
+                  background:"rgba(0,0,0,0.6)",color:C.white,border:"none",cursor:"pointer",fontSize:12,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+            </div>
+          ))}
+          {f.images.length<3 && <button type="button" onClick={()=>fileRef.current?.click()}
+            style={{width:80,height:80,borderRadius:8,border:`2px dashed ${C.g300}`,background:C.g50,
+              cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,color:C.g400}}>+</button>}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" multiple onChange={handleImages} style={{display:"none"}} />
+      </Field>}
+
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        <Btn type="button" variant="secondary" onClick={onCancel} full>Cancel</Btn>
+        <Btn type="submit" full>Post Listing</Btn>
+      </div>
+    </form>
+  </Card>;
+}
+
+// ─── Listing Card ──────────────────────────────────────────
+function ListingCard({listing, marketplace, user, allUsers, onMarkSold, expired}) {
+  const seller = allUsers.find(u=>u.id===listing.sellerId) || {name:"Unknown",whatsapp:""};
+  const isMine = listing.sellerId===user.id;
+  const waLink = `https://wa.me/${(seller.whatsapp||"").replace(/[^0-9+]/g,"")}?text=${encodeURIComponent(`Hi! I'm interested in "${listing.name}" on LionsList (${marketplace.name})`)}`;
+
+  return <div style={{background:C.white,borderRadius:12,overflow:"hidden",border:`1px solid ${C.g200}`,transition:"all 0.2s"}}>
+    {listing.images && listing.images.length>0
+      ? <img src={listing.images[0]} alt={listing.name} style={{width:"100%",height:180,objectFit:"cover",background:C.g100}} />
+      : <div style={{width:"100%",height:180,display:"flex",alignItems:"center",justifyContent:"center",fontSize:48,color:C.g300,background:C.g100}}>📦</div>}
+    <div style={{padding:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"start"}}>
+        <h3 style={{margin:0,fontSize:16}}>{listing.name}</h3>
+        {marketplace.pricingMode!=="free" && listing.price!=null
+          ? <span style={{fontWeight:700,color:C.greenD,fontSize:18}}>${listing.price}</span>
+          : marketplace.pricingMode==="free" && <Badge color="green">FREE</Badge>}
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:8,fontSize:12,color:C.g500}}>
+        <span>Qty: {listing.quantity}</span><span>•</span>
+        <span>{(CATEGORIES.find(c=>c.name===listing.category)||{}).icon} {listing.category}</span>
+      </div>
+      {listing.note && <p style={{color:C.g500,fontSize:13,margin:"8px 0 0",lineHeight:1.4}}>{listing.note}</p>}
+      <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.g100}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:13,color:C.g500}}>by <strong>{seller.name}</strong></span>
+        <div style={{display:"flex",gap:6}}>
+          {!isMine && !expired && !listing.sold && (
+            <a href={waLink} target="_blank" rel="noopener noreferrer"
+              style={{...btnBase,padding:"6px 14px",fontSize:13,background:"#25D366",color:C.white,textDecoration:"none",borderRadius:8}}>💬 WhatsApp</a>
+          )}
+          {isMine && !listing.sold && !expired && onMarkSold && (
+            <Btn small variant="success" onClick={()=>onMarkSold(listing.id)}>Mark as Sold</Btn>
+          )}
+          {listing.sold && <Badge color="red">SOLD</Badge>}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ─── Marketplace View ──────────────────────────────────────
+function MarketplaceView({marketplace, user, onUpdate, onBack, allUsers}) {
+  const [tab, setTab] = useState("buy");
+  const [showCreate, setShowCreate] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const expired = marketplace.expiryDate && new Date(marketplace.expiryDate)<new Date();
+
+  const listings = marketplace.listings||[];
+  const active = listings.filter(l=>!l.sold);
+  const sold = listings.filter(l=>l.sold);
+  const mine = listings.filter(l=>l.sellerId===user.id&&!l.sold);
+
+  const copyId = () => {
+    const el = document.createElement("textarea");
+    el.value = marketplace.id;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    setCopied(true);
+    setTimeout(()=>setCopied(false),2000);
+  };
+
+  const addListing = (l) => { onUpdate({...marketplace,listings:[...listings,l]}); setShowCreate(false); setTab("buy"); };
+  const markSold = (id) => { onUpdate({...marketplace,listings:listings.map(l=>l.id===id?{...l,sold:true}:l)}); };
+
+  const grid = {display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16};
+
+  return <div style={{maxWidth:960,margin:"0 auto",padding:"24px 16px"}}>
+    <button onClick={onBack} style={{background:"none",border:"none",color:C.dark,cursor:"pointer",fontWeight:600,fontSize:14,padding:0,marginBottom:16}}>← Back to Home</button>
+
+    {/* Header */}
+    <Card style={{marginBottom:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",flexWrap:"wrap",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <h1 style={{margin:0,fontSize:24,color:C.dark}}>{marketplace.name}</h1>
+            {expired && <Badge color="red">Archived</Badge>}
+          </div>
+          <p style={{color:C.g500,margin:"8px 0",lineHeight:1.5}}>{marketplace.description}</p>
+          <div style={{display:"flex",gap:16,fontSize:13,color:C.g400,flexWrap:"wrap"}}>
+            <span>Created by <strong>{marketplace.creatorName}</strong></span>
+            <span>{marketplace.pricingMode==="free"?"Free items only":marketplace.pricingMode==="max"?`Max price: $${marketplace.priceMax}`:"Any price"}</span>
+            {marketplace.expiryDate && <span>{expired?"Expired":"Expires"} {new Date(marketplace.expiryDate).toLocaleDateString()}</span>}
+          </div>
+          {marketplace.schoolRestrictions && marketplace.schoolRestrictions.length>0 && (
+            <div style={{marginTop:8,display:"flex",gap:4,flexWrap:"wrap"}}>
+              {marketplace.schoolRestrictions.map(s=><Badge key={s}>{abbr(s)}</Badge>)}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <Btn small variant="secondary" onClick={copyId}>{copied?"Copied!":"📋 Copy ID"}</Btn>
+          {!expired && <Btn small onClick={()=>{setShowCreate(true);setTab("sell");}}>+ New Listing</Btn>}
+        </div>
+      </div>
+    </Card>
+
+    {/* Tabs */}
+    <div style={{display:"flex",borderBottom:`2px solid ${C.g200}`,marginBottom:24}}>
+      {[{k:"buy",l:"Buy",n:active.length},{k:"sell",l:"Sell",n:mine.length},{k:"sold",l:"Sold",n:sold.length}].map(t=>(
+        <button key={t.k} onClick={()=>setTab(t.k)}
+          style={{padding:"10px 24px",cursor:"pointer",fontWeight:600,fontSize:14,border:"none",background:"transparent",
+            borderBottom:`3px solid ${tab===t.k?C.dark:"transparent"}`,color:tab===t.k?C.dark:C.g500,transition:"all 0.2s"}}>
+          {t.l} <Badge color={tab===t.k?"blue":"gray"}>{t.n}</Badge>
+        </button>
+      ))}
+    </div>
+
+    {/* Buy Tab */}
+    {tab==="buy" && (active.length===0
+      ? <Card style={{textAlign:"center",padding:48,color:C.g400}}><div style={{fontSize:48,marginBottom:12}}>🛒</div><p>No active listings yet. Be the first to sell something!</p></Card>
+      : <div style={grid}>{active.map(l=><ListingCard key={l.id} listing={l} marketplace={marketplace} user={user} allUsers={allUsers} expired={expired} />)}</div>
+    )}
+
+    {/* Sell Tab */}
+    {tab==="sell" && <div>
+      {!expired && showCreate && <CreateListingForm marketplace={marketplace} user={user} onSave={addListing} onCancel={()=>setShowCreate(false)} />}
+      {!showCreate && !expired && <div style={{marginBottom:16}}><Btn onClick={()=>setShowCreate(true)}>+ Create New Listing</Btn></div>}
+      {expired && <Card style={{textAlign:"center",padding:24,color:C.g400,marginBottom:16}}>This marketplace is archived. New listings cannot be created.</Card>}
+      {mine.length===0 && !showCreate
+        ? <Card style={{textAlign:"center",padding:48,color:C.g400}}><div style={{fontSize:48,marginBottom:12}}>📋</div><p>You haven't listed anything here yet.</p></Card>
+        : <div style={grid}>{mine.map(l=><ListingCard key={l.id} listing={l} marketplace={marketplace} user={user} allUsers={allUsers} onMarkSold={markSold} expired={expired} />)}</div>}
+    </div>}
+
+    {/* Sold Tab */}
+    {tab==="sold" && (sold.length===0
+      ? <Card style={{textAlign:"center",padding:48,color:C.g400}}><div style={{fontSize:48,marginBottom:12}}>✅</div><p>No sold items yet.</p></Card>
+      : <div style={grid}>{sold.map(l=><ListingCard key={l.id} listing={l} marketplace={marketplace} user={user} allUsers={allUsers} expired={expired} />)}</div>
+    )}
+  </div>;
+}
+
+// ─── Main App ──────────────────────────────────────────────
+function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authStep, setAuthStep] = useState("register");
+  const [pendingUser, setPendingUser] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
+  const [marketplaces, setMarketplaces] = useState([]);
+  const [page, setPage] = useState("home");
+  const [pageArg, setPageArg] = useState(null);
+
+  const navigate = (p, arg) => { setPage(p); setPageArg(arg||null); };
+
+  const handleRegister = (formData) => { setPendingUser(formData); setAuthStep("otp"); };
+
+  const handleVerify = () => {
+    const user = {...pendingUser, id:uid()};
+    setCurrentUser(user);
+    setAllUsers(prev=>[...prev,user]);
+    setAuthStep("done");
+  };
+
+  const handleLogout = () => { setCurrentUser(null); setAuthStep("register"); setPage("home"); };
+
+  const saveMarketplace = (m) => { setMarketplaces(prev=>[...prev,m]); navigate("marketplace",m.id); };
+  const updateMarketplace = (upd) => { setMarketplaces(prev=>prev.map(m=>m.id===upd.id?upd:m)); };
+
+  if(authStep==="register") return <RegisterPage onRegister={handleRegister} />;
+  if(authStep==="otp") return <OTPPage email={pendingUser?.email} onVerify={handleVerify} onBack={()=>setAuthStep("register")} />;
+
+  const currentMkt = marketplaces.find(m=>m.id===pageArg);
+
+  return <div style={{fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',minHeight:"100vh",background:C.g50,color:C.g900}}>
+    <NavBar user={currentUser} onLogout={handleLogout} onHome={()=>navigate("home")} />
+    {page==="home" && <HomePage user={currentUser} marketplaces={marketplaces} onNavigate={navigate} />}
+    {page==="createMarketplace" && <CreateMarketplacePage user={currentUser} onSave={saveMarketplace} onBack={()=>navigate("home")} />}
+    {page==="marketplace" && currentMkt && <MarketplaceView marketplace={currentMkt} user={currentUser} onUpdate={updateMarketplace} onBack={()=>navigate("home")} allUsers={allUsers} />}
+    {page==="marketplace" && !currentMkt && (
+      <div style={{maxWidth:960,margin:"0 auto",padding:"24px 16px"}}>
+        <Card style={{textAlign:"center",padding:48}}>
+          <div style={{fontSize:48,marginBottom:12}}>🔍</div>
+          <h2>Marketplace Not Found</h2>
+          <p style={{color:C.g500}}>This marketplace may have been removed.</p>
+          <Btn onClick={()=>navigate("home")} style={{marginTop:16}}>Back to Home</Btn>
+        </Card>
+      </div>
+    )}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

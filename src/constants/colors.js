@@ -1,0 +1,17 @@
+export const C = {
+  blue: "#B9D9EB",
+  dark: "#1D4F91",
+  light: "#E8F4FD",
+  white: "#FFF",
+  g50: "#F9FAFB",
+  g100: "#F3F4F6",
+  g200: "#E5E7EB",
+  g300: "#D1D5DB",
+  g400: "#9CA3AF",
+  g500: "#6B7280",
+  g700: "#374151",
+  g900: "#111827",
+  red: "#EF4444",
+  green: "#22C55E",
+  greenD: "#16A34A",
+};
