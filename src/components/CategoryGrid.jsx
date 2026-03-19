@@ -2,7 +2,7 @@ import { CATEGORIES } from "../constants/categories";
 
 export default function CategoryGrid({ onCategoryClick }) {
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-4">
+    <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
       {CATEGORIES.map((c) => (
         <div
           key={c.name}

@@ -48,6 +48,13 @@ export default function CreateMarketplacePage() {
       alert("Please enter a valid price maximum.");
       return;
     }
+    if (form.expiryDate && profile?.graduation_year) {
+      const expiryYear = new Date(form.expiryDate).getFullYear();
+      if (expiryYear > profile.graduation_year) {
+        alert(`Marketplaces cannot expire beyond your graduation year. Please select a date on or before December 31, ${profile.graduation_year}.`);
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
@@ -132,7 +139,6 @@ export default function CreateMarketplacePage() {
             onChange={(e) => update("category", e.target.value)}
           >
             <option value="">Select a category...</option>
-            <option value="Other">📦 Other</option>
             {CATEGORIES.map((c) => (
               <option key={c.name} value={c.name}>
                 {c.icon} {c.name}

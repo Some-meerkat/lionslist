@@ -326,7 +326,6 @@ export default function MarketplaceDetailPage() {
             onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))}
           >
             <option value="">Select a category...</option>
-            <option value="Other">📦 Other</option>
             {CATEGORIES.map((c) => (
               <option key={c.name} value={c.name}>
                 {c.icon} {c.name}

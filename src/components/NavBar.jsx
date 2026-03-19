@@ -32,13 +32,12 @@ export default function NavBar() {
           >
             {profile?.full_name} · {profile?.school ? abbr(profile.school) : ""}
           </span>
-          <Button
-            small
-            className="!bg-white/15 !text-white !border !border-white/30"
-            onClick={handleLogout}
+          <button
+            className="text-white text-xl bg-transparent border-none cursor-pointer ml-1 hover:opacity-80 transition-opacity"
+            onClick={() => setMenuOpen(true)}
           >
-            Log Out
-          </Button>
+            ☰
+          </button>
         </div>
         {/* Mobile hamburger */}
         <button

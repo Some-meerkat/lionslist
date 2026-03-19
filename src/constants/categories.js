@@ -13,5 +13,9 @@ export const CATEGORIES = [
   { name: "Sports & Fitness Equipment", icon: "\u26BD" },
   { name: "Musical Instruments", icon: "\uD83C\uDFB8" },
   { name: "Jobs & Gigs", icon: "\uD83D\uDCBC" },
-  { name: "Travel & Rideshares", icon: "\u2708\uFE0F" },
+  { name: "Travel", icon: "\u2708\uFE0F" },
+  { name: "Lab & Art Supplies", icon: "\uD83D\uDD2C" },
+  { name: "Gaming", icon: "\uD83C\uDFAE" },
+  { name: "Food & Meal Plans", icon: "\uD83C\uDF55" },
+  { name: "Other", icon: "\uD83D\uDCE6" },
 ];
