@@ -406,7 +406,10 @@ export default function HomePage() {
             {/* Categories */}
             <div>
               <h2 className="text-lg font-bold mb-5">Browse by Category</h2>
-              <CategoryGrid onCategoryClick={setSearch} />
+              <CategoryGrid onCategoryClick={(cat) => {
+                setFilters((f) => ({ ...f, category: cat }));
+                setShowFilters(true);
+              }} />
             </div>
 
             {/* Pending */}
