@@ -43,7 +43,7 @@ export default function HomePage() {
     // My pending buy requests
     const { data: myRequests } = await supabase
       .from("buy_requests")
-      .select("*, listings(id, name, price, category, marketplace_id, seller_id, marketplaces(id, name))")
+      .select("*, listings(id, name, price, category, marketplace_id, seller_id, marketplaces(id, name, code))")
       .eq("buyer_id", profile.id)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
@@ -58,7 +58,7 @@ export default function HomePage() {
     if (myListings?.length) {
       const { data: incoming } = await supabase
         .from("buy_requests")
-        .select("*, listings(id, name, price, category, marketplaces(id, name))")
+        .select("*, listings(id, name, price, category, marketplaces(id, name, code))")
         .in("listing_id", myListings.map((l) => l.id))
         .eq("status", "pending")
         .order("created_at", { ascending: false })
@@ -167,7 +167,7 @@ export default function HomePage() {
       if (m.name.toLowerCase().includes(q) && !seen.has("m:" + m.id)) {
         seen.add("m:" + m.id);
         const catIcon = CATEGORIES.find((c) => c.name === m.category)?.icon;
-        items.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, id: m.id });
+        items.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, code: m.code || m.id });
       }
     }
     for (const [id, name] of Object.entries(creators)) {
@@ -181,7 +181,7 @@ export default function HomePage() {
 
   const handleSuggestionClick = (s) => {
     if (s.type === "marketplace") {
-      navigate(`/marketplace/${s.id}`);
+      navigate(`/marketplace/${s.code}`);
     } else {
       setSearch(s.label);
       setShowSuggestions(false);
@@ -200,27 +200,14 @@ export default function HomePage() {
       return;
     }
     // Check if it's a UUID (direct ID) or a code
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input);
-    if (isUuid) {
-      navigate(`/marketplace/${input}`);
-    } else {
-      const { data } = await supabase
-        .from("marketplaces")
-        .select("id")
-        .eq("code", input.toLowerCase())
-        .single();
-      if (data) {
-        navigate(`/marketplace/${data.id}`);
-      } else {
-        alert("Marketplace not found. Check the code and try again.");
-      }
-    }
+    // Navigate directly — the detail page handles both UUIDs and codes
+    navigate(`/marketplace/${input}`);
   };
 
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Hero */}
-      <div className="relative bg-gradient-to-br from-blue-700 to-blue-500 text-white py-8 md:py-10 px-6 md:px-10 text-center">
+      <div className="relative bg-gradient-to-br from-blue-700 to-blue-500 text-white py-8 md:py-10 px-6 md:px-10 text-center overflow-hidden">
         {/* Decorative circles */}
         <div className="absolute top-[-60px] left-[-40px] w-48 h-48 bg-white/10 rounded-full" />
         <div className="absolute bottom-[-30px] right-[-20px] w-36 h-36 bg-white/10 rounded-full" />
@@ -242,8 +229,8 @@ export default function HomePage() {
         </div>
 
         {/* Wave divider */}
-        <div className="absolute bottom-0 left-0 w-full z-0">
-          <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block">
+        <div className="absolute bottom-0 left-0 w-full">
+          <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full block" preserveAspectRatio="none" style={{ marginBottom: "-1px" }}>
             <path d="M0 60V20C240 50 480 0 720 20C960 40 1200 10 1440 30V60H0Z" fill="#F9FAFB" />
           </svg>
         </div>
@@ -253,7 +240,7 @@ export default function HomePage() {
       <div className="max-w-screen-xl mx-auto px-8 py-8 space-y-8">
         {/* Join section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <p className="font-semibold text-gray-700 mb-3">Join a Marketplace via Link</p>
+          <p className="font-semibold text-gray-700 mb-3">Find a Marketplace via Link</p>
           <div className="flex gap-2">
             <input
               className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
@@ -265,7 +252,7 @@ export default function HomePage() {
               onClick={handleJoin}
               className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium cursor-pointer border-none hover:bg-blue-700 transition-colors"
             >
-              Join
+              Find
             </button>
           </div>
         </div>
@@ -398,6 +385,14 @@ export default function HomePage() {
                 </div>
               </>
             )}
+            {filters.category && (
+              <button
+                onClick={() => navigate(`/marketplace/create?category=${encodeURIComponent(filters.category)}`)}
+                className="mt-4 w-full py-3 text-sm font-semibold text-[#1D4F91] bg-[#E8F4FD] border border-[#1D4F91] rounded-lg cursor-pointer hover:bg-[#d6ecfa] transition-colors"
+              >
+                + Create a new {filters.category} marketplace
+              </button>
+            )}
           </div>
         )}
 
@@ -437,7 +432,7 @@ export default function HomePage() {
                     <Card
                       key={r.id}
                       hover
-                      onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.id}`)}
+                      onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.code || r.listings?.marketplaces?.id}`)}
                       className="!p-4"
                     >
                       <div className="flex justify-between items-start">
@@ -457,7 +452,7 @@ export default function HomePage() {
                     <Card
                       key={r.id}
                       hover
-                      onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.id}`)}
+                      onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.code || r.listings?.marketplaces?.id}`)}
                       className="!p-4"
                     >
                       <div className="flex justify-between items-start">
@@ -482,10 +477,18 @@ export default function HomePage() {
               <div>
                 <h2 className="text-lg font-bold mb-5">My Marketplaces</h2>
                 <div className="grid gap-4">
-                  {myCreated.map((m) => (
+                  {myCreated.slice(0, 3).map((m) => (
                     <MarketplaceCard key={m.id} marketplace={m} />
                   ))}
                 </div>
+                {myCreated.length > 3 && (
+                  <button
+                    onClick={() => navigate("/marketplace/mine")}
+                    className="mt-4 w-full py-2.5 text-sm text-[#1D4F91] font-semibold bg-transparent border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
+                    See More
+                  </button>
+                )}
               </div>
             )}
 
@@ -500,11 +503,21 @@ export default function HomePage() {
                   <p>No active marketplaces yet. Be the first to create one!</p>
                 </Card>
               ) : (
-                <div className="grid gap-4">
-                  {active.map((m) => (
-                    <MarketplaceCard key={m.id} marketplace={m} />
-                  ))}
-                </div>
+                <>
+                  <div className="grid gap-4">
+                    {active.slice(0, 3).map((m) => (
+                      <MarketplaceCard key={m.id} marketplace={m} />
+                    ))}
+                  </div>
+                  {active.length > 3 && (
+                    <button
+                      onClick={() => navigate("/marketplace/search")}
+                      className="mt-4 w-full py-2.5 text-sm text-[#1D4F91] font-semibold bg-transparent border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      See More
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </>

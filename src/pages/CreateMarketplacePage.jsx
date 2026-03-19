@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { SCHOOLS } from "../constants/schools";
 import { CATEGORIES } from "../constants/categories";
 import { abbr, slugify } from "../utils/helpers";
+import { checkProfanity } from "../utils/profanity";
 import Card from "../components/ui/Card";
 import Input from "../components/ui/Input";
 import TextArea from "../components/ui/TextArea";
@@ -15,10 +16,11 @@ import Toggle from "../components/ui/Toggle";
 
 export default function CreateMarketplacePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { profile } = useAuth();
   const [form, setForm] = useState({
     name: "",
-    category: "",
+    category: searchParams.get("category") || "",
     description: "",
     pricingMode: "any",
     priceMax: "",
@@ -42,6 +44,11 @@ export default function CreateMarketplacePage() {
     e.preventDefault();
     if (!form.name.trim() || !form.description.trim()) {
       alert("Please fill in the name and description.");
+      return;
+    }
+    const badWord = checkProfanity(form.name, form.description);
+    if (badWord) {
+      alert("Please remove offensive language from your marketplace name or description.");
       return;
     }
     if (form.pricingMode === "max" && (!form.priceMax || Number(form.priceMax) <= 0)) {
@@ -99,7 +106,7 @@ export default function CreateMarketplacePage() {
       }
 
       if (error) throw error;
-      navigate(`/marketplace/${data.id}`);
+      navigate(`/marketplace/${data.code || data.id}`);
     } catch (err) {
       console.error("Failed to create marketplace:", err);
       alert("Failed to create marketplace. Please try again.");

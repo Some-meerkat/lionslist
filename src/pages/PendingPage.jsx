@@ -27,7 +27,7 @@ export default function PendingPage() {
     // Requests I made (buying)
     const { data: myRequests } = await supabase
       .from("buy_requests")
-      .select("*, listings(id, name, price, category, sold, marketplace_id, seller_id, marketplaces(id, name))")
+      .select("*, listings(id, name, price, category, sold, marketplace_id, seller_id, marketplaces(id, name, code))")
       .eq("buyer_id", profile.id)
       .order("created_at", { ascending: false });
 
@@ -60,7 +60,7 @@ export default function PendingPage() {
       const listingIds = myListings.map((l) => l.id);
       const { data: incomingRequests } = await supabase
         .from("buy_requests")
-        .select("*, listings(id, name, price, category, sold, marketplace_id, marketplaces(id, name))")
+        .select("*, listings(id, name, price, category, sold, marketplace_id, marketplaces(id, name, code))")
         .in("listing_id", listingIds)
         .order("created_at", { ascending: false });
 
@@ -294,7 +294,7 @@ function RequestCard({ request, type, onAccept, onDecline, onCancel, onNavigate 
       <div className="flex justify-between items-start gap-3">
         <div
           className="flex-1 min-w-0 cursor-pointer"
-          onClick={() => marketplace?.id && onNavigate(`/marketplace/${marketplace.id}`)}
+          onClick={() => marketplace && onNavigate(`/marketplace/${marketplace.code || marketplace.id}`)}
         >
           <div className="flex items-center gap-2">
             <span className="text-lg">{cat?.icon || "\uD83D\uDCE6"}</span>

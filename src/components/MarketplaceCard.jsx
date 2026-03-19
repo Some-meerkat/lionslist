@@ -13,7 +13,7 @@ export default function MarketplaceCard({ marketplace }) {
   return (
     <Card
       hover
-      onClick={() => navigate(`/marketplace/${m.id}`)}
+      onClick={() => navigate(`/marketplace/${m.code || m.id}`)}
       className="!p-4"
     >
       <div className="flex justify-between items-start">

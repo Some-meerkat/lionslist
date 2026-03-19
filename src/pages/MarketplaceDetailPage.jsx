@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { abbr } from "../utils/helpers";
+import { checkProfanity } from "../utils/profanity";
 import { CATEGORIES } from "../constants/categories";
 import { SCHOOLS } from "../constants/schools";
 import Card from "../components/ui/Card";
@@ -18,7 +19,7 @@ import CreateListingForm from "../components/CreateListingForm";
 import SearchFilters from "../components/SearchFilters";
 
 export default function MarketplaceDetailPage() {
-  const { id } = useParams();
+  const { code } = useParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [marketplace, setMarketplace] = useState(null);
@@ -40,14 +41,16 @@ export default function MarketplaceDetailPage() {
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [code]);
 
   async function fetchData() {
     setLoading(true);
+    // Support both code and UUID for backwards compatibility
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(code);
     const { data: mkt } = await supabase
       .from("marketplaces")
       .select("*")
-      .eq("id", id)
+      .eq(isUuid ? "id" : "code", code)
       .single();
 
     if (!mkt) {
@@ -59,7 +62,7 @@ export default function MarketplaceDetailPage() {
     const { data: listingsData } = await supabase
       .from("listings")
       .select("*, listing_images(*)")
-      .eq("marketplace_id", id)
+      .eq("marketplace_id", mkt.id)
       .order("created_at", { ascending: false });
 
     setListings(listingsData || []);
@@ -159,6 +162,11 @@ export default function MarketplaceDetailPage() {
       alert("Name and description are required.");
       return;
     }
+    const badWord = checkProfanity(editForm.name, editForm.description);
+    if (badWord) {
+      alert("Please remove offensive language from your marketplace name or description.");
+      return;
+    }
     if (editForm.pricingMode === "max" && (!editForm.priceMax || Number(editForm.priceMax) <= 0)) {
       alert("Please enter a valid price maximum.");
       return;
@@ -178,7 +186,7 @@ export default function MarketplaceDetailPage() {
       const { error } = await supabase
         .from("marketplaces")
         .update(updates)
-        .eq("id", id);
+        .eq("id", marketplace.id);
       if (error) throw error;
       setMarketplace((m) => ({ ...m, ...updates }));
       setEditing(false);
@@ -194,7 +202,7 @@ export default function MarketplaceDetailPage() {
       return;
     }
     try {
-      const { error } = await supabase.from("marketplaces").delete().eq("id", id);
+      const { error } = await supabase.from("marketplaces").delete().eq("id", marketplace.id);
       if (error) throw error;
       navigate("/home");
     } catch (err) {
@@ -447,7 +455,7 @@ export default function MarketplaceDetailPage() {
               <p>No active listings yet. Be the first to sell something!</p>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={marketplace.allow_pictures ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "grid grid-cols-1 gap-3"}>
               {filteredActive.map((l) => (
                 <ListingCard
                   key={l.id}
@@ -455,6 +463,7 @@ export default function MarketplaceDetailPage() {
                   marketplace={marketplace}
                   sellerProfile={sellers[l.seller_id]}
                   expired={expired}
+                  onUpdate={fetchData}
                 />
               ))}
             </div>
@@ -494,7 +503,7 @@ export default function MarketplaceDetailPage() {
               <p>You haven't listed anything here yet.</p>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={marketplace.allow_pictures ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "grid grid-cols-1 gap-3"}>
               {mine.map((l) => (
                 <ListingCard
                   key={l.id}
@@ -503,6 +512,7 @@ export default function MarketplaceDetailPage() {
                   sellerProfile={sellers[l.seller_id]}
                   onMarkSold={markSold}
                   expired={expired}
+                  onUpdate={fetchData}
                 />
               ))}
             </div>

@@ -32,7 +32,7 @@ export default function ProfilePage() {
   async function fetchMyListings() {
     const { data } = await supabase
       .from("listings")
-      .select("*, marketplaces(id, name)")
+      .select("*, marketplaces(id, name, code)")
       .eq("seller_id", profile.id)
       .order("created_at", { ascending: false });
     setMyListings(data || []);
@@ -167,7 +167,7 @@ export default function ProfilePage() {
                 key={l.id}
                 className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
                 onClick={() =>
-                  l.marketplaces?.id && navigate(`/marketplace/${l.marketplaces.id}`)
+                  l.marketplaces && navigate(`/marketplace/${l.marketplaces.code || l.marketplaces.id}`)
                 }
               >
                 <div>
@@ -211,7 +211,7 @@ export default function ProfilePage() {
                 <div
                   key={m.id}
                   className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => navigate(`/marketplace/${m.id}`)}
+                  onClick={() => navigate(`/marketplace/${m.code || m.id}`)}
                 >
                   <div>
                     <span className="font-medium text-sm">{m.name}</span>

@@ -13,6 +13,8 @@ import SearchMarketplacePage from "./pages/SearchMarketplacePage";
 import PendingPage from "./pages/PendingPage";
 import FeedbackPage from "./pages/FeedbackPage";
 import CommunityPage from "./pages/CommunityPage";
+import MyMarketplacesPage from "./pages/MyMarketplacesPage";
+import ScrollToTop from "./components/ScrollToTop";
 
 function Layout({ children }) {
   return (
@@ -27,6 +29,7 @@ function Layout({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <Routes>
           <Route path="/" element={<RegisterPage />} />
@@ -37,6 +40,16 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <HomePage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/marketplace/mine"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <MyMarketplacesPage />
                 </Layout>
               </ProtectedRoute>
             }
@@ -62,7 +75,7 @@ export default function App() {
             }
           />
           <Route
-            path="/marketplace/:id"
+            path="/marketplace/:code"
             element={
               <ProtectedRoute>
                 <Layout>

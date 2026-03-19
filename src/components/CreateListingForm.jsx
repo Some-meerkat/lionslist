@@ -4,6 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { moderateContent } from "../lib/moderation";
 import { validateListing } from "../utils/validators";
+import { checkProfanity } from "../utils/profanity";
 import Input from "./ui/Input";
 import TextArea from "./ui/TextArea";
 import Select from "./ui/Select";
@@ -31,6 +32,12 @@ export default function CreateListingForm({ marketplace, onSave, onCancel }) {
     const errs = validateListing(form, marketplace);
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
+
+    const badWord = checkProfanity(form.name, form.note);
+    if (badWord) {
+      alert("Please remove offensive language from your listing.");
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -139,12 +146,16 @@ export default function CreateListingForm({ marketplace, onSave, onCancel }) {
             error={errors.price}
           />
         )}
-        <TextArea
-          label="Note (optional)"
-          placeholder="Any details about the item..."
-          value={form.note}
-          onChange={(e) => update("note", e.target.value)}
-        />
+        <div>
+          <TextArea
+            label="Note (optional)"
+            placeholder="Any details about the item..."
+            value={form.note}
+            maxLength={100}
+            onChange={(e) => update("note", e.target.value)}
+          />
+          <p className="text-xs text-gray-400 text-right mt-1 m-0">{form.note.length}/100</p>
+        </div>
         {marketplace.allow_pictures && (
           <ImageUpload images={images} onChange={setImages} />
         )}

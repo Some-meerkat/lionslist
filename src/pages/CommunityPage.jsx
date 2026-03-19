@@ -34,7 +34,7 @@ export default function CommunityPage() {
     // Fetch listings with marketplace info
     const { data: listingsData } = await supabase
       .from("listings")
-      .select("id, name, price, category, sold, seller_id, marketplace_id, marketplaces(id, name)")
+      .select("id, name, price, category, sold, seller_id, marketplace_id, marketplaces(id, name, code)")
       .order("created_at", { ascending: false });
 
     const listingMap = {};
@@ -47,7 +47,7 @@ export default function CommunityPage() {
     // Fetch marketplaces
     const { data: mktData } = await supabase
       .from("marketplaces")
-      .select("id, name, category, creator_id")
+      .select("id, name, category, code, creator_id")
       .order("created_at", { ascending: false });
 
     const mktMap = {};
@@ -232,7 +232,7 @@ export default function CommunityPage() {
                                     className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/marketplace/${l.marketplaces?.id || l.marketplace_id}`);
+                                      navigate(`/marketplace/${l.marketplaces?.code || l.marketplaces?.id || l.marketplace_id}`);
                                     }}
                                   >
                                     <div className="flex items-center gap-2 min-w-0">
@@ -264,7 +264,7 @@ export default function CommunityPage() {
                                     className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/marketplace/${m.id}`);
+                                      navigate(`/marketplace/${m.code || m.id}`);
                                     }}
                                   >
                                     <span className="text-sm">{cat?.icon || "\uD83C\uDFEA"}</span>

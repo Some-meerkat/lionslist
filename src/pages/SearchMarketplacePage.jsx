@@ -125,7 +125,7 @@ export default function SearchMarketplacePage() {
       if (m.name.toLowerCase().includes(q) && !seen.has("m:" + m.id)) {
         seen.add("m:" + m.id);
         const catIcon = CATEGORIES.find((c) => c.name === m.category)?.icon;
-        items.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, id: m.id });
+        items.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, code: m.code || m.id });
       }
     }
 
@@ -144,7 +144,7 @@ export default function SearchMarketplacePage() {
 
   const handleSuggestionClick = (s) => {
     if (s.type === "marketplace") {
-      navigate(`/marketplace/${s.id}`);
+      navigate(`/marketplace/${s.code}`);
     } else {
       setQuery(s.label);
       setShowSuggestions(false);
@@ -300,6 +300,14 @@ export default function SearchMarketplacePage() {
               ))}
             </div>
           </>
+        )}
+        {filters.category && (
+          <button
+            onClick={() => navigate(`/marketplace/create?category=${encodeURIComponent(filters.category)}`)}
+            className="mt-4 w-full py-3 text-sm font-semibold text-[#1D4F91] bg-[#E8F4FD] border border-[#1D4F91] rounded-lg cursor-pointer hover:bg-[#d6ecfa] transition-colors"
+          >
+            + Create a new {filters.category} marketplace
+          </button>
         )}
       </div>
     </div>
