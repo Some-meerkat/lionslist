@@ -9,17 +9,18 @@ export function AuthProvider({ children }) {
   const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
+    let mounted = true;
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (mounted) setSession(session ?? null);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+      if (mounted) setSession(newSession ?? null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -32,17 +33,21 @@ export function AuthProvider({ children }) {
   }, [session]);
 
   async function fetchProfile(userId) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (error && error.code !== "PGRST116") {
-      // Network or other error — keep profile as undefined (loading) rather than null
-      // PGRST116 = "no rows returned" which means genuinely no profile
-      return;
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+      if (error && error.code !== "PGRST116") {
+        // Network or other error — set profile to null so app doesn't hang on loading
+        console.error("Profile fetch error:", error);
+      }
+      setProfile(data || null);
+    } catch (err) {
+      console.error("Profile fetch exception:", err);
+      setProfile(null);
     }
-    setProfile(data);
   }
 
   async function fetchPendingCount(userId) {
