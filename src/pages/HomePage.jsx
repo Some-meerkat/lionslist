@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { CATEGORIES } from "../constants/categories";
 import { SCHOOLS } from "../constants/schools";
-import { abbr } from "../utils/helpers";
+import { abbr, whatsappLink } from "../utils/helpers";
 import { Clock } from "lucide-react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
@@ -14,7 +14,7 @@ import MarketplaceCard from "../components/MarketplaceCard";
 import CategoryGrid from "../components/CategoryGrid";
 
 export default function HomePage() {
-  const { profile } = useAuth();
+  const { profile, refreshPending } = useAuth();
   const navigate = useNavigate();
   const [marketplaces, setMarketplaces] = useState([]);
   const [allListings, setAllListings] = useState([]);
@@ -31,6 +31,11 @@ export default function HomePage() {
   const [showMarketplaceResults, setShowMarketplaceResults] = useState(false);
   const [pendingBuy, setPendingBuy] = useState([]);
   const [pendingSell, setPendingSell] = useState([]);
+  const [remindRequest, setRemindRequest] = useState(null);
+  const [cancelRequest, setCancelRequest] = useState(null);
+  const [homeToast, setHomeToast] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelOther, setCancelOther] = useState("");
 
   useEffect(() => {
     fetchMarketplaces();
@@ -61,7 +66,23 @@ export default function HomePage() {
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(5);
-    setPendingBuy(myRequests || []);
+    // Fetch seller profiles for WhatsApp reminders
+    if (myRequests?.length) {
+      const sellerIds = [...new Set(myRequests.map((r) => r.listings?.seller_id).filter(Boolean))];
+      if (sellerIds.length) {
+        const { data: sellerProfiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, whatsapp")
+          .in("id", sellerIds);
+        const sellerMap = {};
+        (sellerProfiles || []).forEach((p) => (sellerMap[p.id] = p));
+        setPendingBuy(myRequests.map((r) => ({ ...r, sellerProfile: sellerMap[r.listings?.seller_id] })));
+      } else {
+        setPendingBuy(myRequests);
+      }
+    } else {
+      setPendingBuy([]);
+    }
 
     // Pending requests on my listings
     const { data: myListings } = await supabase
@@ -589,7 +610,7 @@ export default function HomePage() {
                   <p className="text-sm">Browse marketplaces and request items you're interested in.</p>
                 </Card>
               ) : (
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3">
                   {pendingSell.map((r) => (
                     <Card
                       key={r.id}
@@ -611,14 +632,12 @@ export default function HomePage() {
                     </Card>
                   ))}
                   {pendingBuy.map((r) => (
-                    <Card
-                      key={r.id}
-                      hover
-                      onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.code || r.listings?.marketplaces?.id}`)}
-                      className="!p-4"
-                    >
+                    <Card key={r.id} className="!p-4">
                       <div className="flex justify-between items-start">
-                        <div>
+                        <div
+                          className="cursor-pointer"
+                          onClick={() => navigate(`/marketplace/${r.listings?.marketplaces?.code || r.listings?.marketplaces?.id}`)}
+                        >
                           <p className="text-sm font-semibold text-gray-900 m-0">
                             {r.listings?.name}
                           </p>
@@ -626,7 +645,20 @@ export default function HomePage() {
                             in {r.listings?.marketplaces?.name}
                           </p>
                         </div>
-                        <Badge color="gray">Awaiting Reply</Badge>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <button
+                            onClick={() => setRemindRequest(r)}
+                            className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors"
+                          >
+                            Report as Sold
+                          </button>
+                          <button
+                            onClick={() => setCancelRequest(r)}
+                            className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors"
+                          >
+                            Cancel Request
+                          </button>
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -665,6 +697,128 @@ export default function HomePage() {
           </>
         )}
       </div>
+
+      {/* Cancel Request Modal */}
+      {cancelRequest && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+          onClick={() => setCancelRequest(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-900 m-0 mb-1">Do you want to cancel this request?</h3>
+            <p className="text-sm text-gray-500 mt-0 mb-1">Reason to cancel</p>
+            <div className="mb-4 space-y-3">
+              <select
+                value={cancelReason}
+                onChange={(e) => { setCancelReason(e.target.value); if (e.target.value !== "Other") setCancelOther(""); }}
+                className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 outline-none focus:border-[#002B5C] focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="">Select a reason...</option>
+                <option value="Seller is not responding">Seller is not responding</option>
+                <option value="Changed my mind">Changed my mind</option>
+                <option value="Bought another item">Bought another item</option>
+                <option value="Requested by accident">Requested by accident</option>
+                <option value="Other">Other</option>
+              </select>
+              {cancelReason === "Other" && (
+                <input
+                  type="text"
+                  placeholder="Please specify (optional)"
+                  value={cancelOther}
+                  onChange={(e) => setCancelOther(e.target.value)}
+                  className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 outline-none focus:border-[#002B5C] focus:ring-2 focus:ring-blue-100"
+                />
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  await supabase.from("buy_requests").delete().eq("id", cancelRequest.id);
+                  setPendingBuy((prev) => prev.filter((r) => r.id !== cancelRequest.id));
+                  setCancelRequest(null);
+                  setCancelReason("");
+                  setCancelOther("");
+                  refreshPending();
+                }}
+                disabled={!cancelReason}
+                className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 border-none rounded-lg cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Cancel Request
+              </button>
+              <button
+                onClick={() => { setCancelRequest(null); setCancelReason(""); setCancelOther(""); }}
+                className="w-full py-2.5 text-sm font-semibold text-white bg-[#002B5C] border-none rounded-lg cursor-pointer hover:bg-[#001F42] transition-colors"
+              >
+                Keep Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report as Sold Modal */}
+      {remindRequest && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+          onClick={() => setRemindRequest(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-900 m-0 mb-1">Report as Sold</h3>
+            <p className="text-sm text-gray-500 mt-0 mb-4">
+              Did you buy <strong>{remindRequest.listings?.name}</strong>?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={async () => {
+                  const req = remindRequest;
+                  setRemindRequest(null);
+                  await supabase.from("listings").update({ sale_pending: true, buyer_id: profile.id }).eq("id", req.listings?.id);
+                  await supabase.from("buy_requests").delete().eq("id", req.id);
+                  setPendingBuy((prev) => prev.filter((r) => r.id !== req.id));
+                  refreshPending();
+                  setHomeToast("This item will appear as pending until the seller confirms the transaction. We hope you enjoy your purchase!"); setTimeout(() => setHomeToast(null), 4000);
+                }}
+                className="w-full py-2.5 text-sm font-semibold text-white bg-[#25D366] border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors"
+              >
+                I bought this item
+              </button>
+              <button
+                onClick={async () => {
+                  const req = remindRequest;
+                  setRemindRequest(null);
+                  await supabase.from("listings").update({ sale_pending: true }).eq("id", req.listings?.id);
+                  await supabase.from("buy_requests").delete().eq("id", req.id);
+                  setPendingBuy((prev) => prev.filter((r) => r.id !== req.id));
+                  refreshPending();
+                  setHomeToast("Thanks for letting us know!"); setTimeout(() => setHomeToast(null), 3000);
+                }}
+                className="w-full py-2.5 text-sm font-semibold text-[#002B5C] bg-[#DCE9F5] border-none rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors"
+              >
+                Someone else bought it
+              </button>
+              <button
+                onClick={() => setRemindRequest(null)}
+                className="w-full py-2 text-sm text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {homeToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-gray-900 text-white px-6 py-3 rounded-xl shadow-xl text-sm font-medium" onClick={() => setHomeToast(null)}>
+          {homeToast}
+        </div>
+      )}
     </div>
   );
 }

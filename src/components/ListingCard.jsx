@@ -29,6 +29,8 @@ export default function ListingCard({
   const menuRef = useRef(null);
   const [requested, setRequested] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [showRemind, setShowRemind] = useState(false);
+  const [toast, setToast] = useState(null);
 
   // Check if user already requested this listing
   useEffect(() => {
@@ -391,6 +393,58 @@ export default function ListingCard({
     </div>
   );
 
+  const handleRemindAction = async (iBought) => {
+    setShowRemind(false);
+    if (profile) {
+      const update = { sale_pending: true };
+      if (iBought) update.buyer_id = profile.id;
+      const { error } = await supabase.from("listings").update(update).eq("id", listing.id);
+      if (error) { console.error("Sale pending update error:", error); alert("Failed to update: " + error.message); return; }
+      await supabase.from("buy_requests").delete().eq("listing_id", listing.id).eq("buyer_id", profile.id);
+      setRequested(false);
+      refreshPending();
+      if (onUpdate) onUpdate();
+    }
+    setToast(iBought
+      ? "This item will appear as pending until the seller confirms the transaction. We hope you enjoy your purchase!"
+      : "Thanks for letting us know!");
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const remindModal = showRemind && (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={() => setShowRemind(false)}>
+      <div className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-gray-900 m-0 mb-1">Report as Sold</h3>
+        <p className="text-sm text-gray-500 mt-0 mb-4">
+          Did you buy <strong>{listing.name}</strong>?
+        </p>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => handleRemindAction(true)}
+            className="w-full py-2.5 text-sm font-semibold text-white bg-[#25D366] border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors"
+          >
+            I bought this item
+          </button>
+          <button
+            onClick={() => handleRemindAction(false)}
+            className="w-full py-2.5 text-sm font-semibold text-[#002B5C] bg-[#DCE9F5] border-none rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors"
+          >
+            Someone else bought it
+          </button>
+          <button onClick={() => setShowRemind(false)} className="w-full py-2 text-sm text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const toastEl = toast && (
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-gray-900 text-white px-6 py-3 rounded-xl shadow-xl text-sm font-medium" onClick={() => setToast(null)}>
+      {toast}
+    </div>
+  );
+
   const compact = !marketplace.allow_pictures && !firstImage;
 
   const expandedModal = expanded && (
@@ -467,9 +521,15 @@ export default function ListingCard({
                 </span>
               </div>
               <div className="flex gap-2 mt-4 flex-wrap items-center">
-                {!isMine && !expired && !listing.sold && (
+                {listing.sale_pending && !listing.sold && (
+                  <Badge color="yellow">Pending Sale Confirmation</Badge>
+                )}
+                {!isMine && !expired && !listing.sold && !listing.sale_pending && (
                   requested ? (
-                    <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
+                      <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
+                    </>
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
@@ -490,7 +550,7 @@ export default function ListingCard({
                     <Trash2 size={14} /> Delete Listing
                   </button>
                 )}
-                {listing.sold && <Badge color="red">SOLD</Badge>}
+                {listing.sold && (listing.buyer_id === profile?.id ? <Badge color="green">Bought</Badge> : <Badge color="red">Sold</Badge>)}
               </div>
             </>
           )}
@@ -514,6 +574,8 @@ export default function ListingCard({
       {soldConfirmModal}
       {reactivateConfirmModal}
       {unrequestModal}
+      {remindModal}
+      {toastEl}
       <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md p-4 cursor-pointer" onClick={() => { setActiveImg(0); setExpanded(true); }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -535,9 +597,15 @@ export default function ListingCard({
             ) : (
               marketplace.pricing_mode === "free" && <Badge color="green">FREE</Badge>
             )}
-            {!isMine && !expired && !listing.sold && (
+            {listing.sale_pending && !listing.sold && (
+              <Badge color="yellow">Pending Sale Confirmation</Badge>
+            )}
+            {!isMine && !expired && !listing.sold && !listing.sale_pending && (
               requested ? (
-                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
+                <>
+                  <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
+                  <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel</button>
+                </>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
@@ -551,7 +619,7 @@ export default function ListingCard({
             )}
             {markSoldButton}
             {ownerMenu}
-            {listing.sold && <Badge color="red">SOLD</Badge>}
+            {listing.sold && (listing.buyer_id === profile?.id ? <Badge color="green">Bought</Badge> : <Badge color="red">Sold</Badge>)}
           </div>
         </div>
         {listing.note && (
@@ -570,6 +638,8 @@ export default function ListingCard({
     {soldConfirmModal}
     {reactivateConfirmModal}
     {unrequestModal}
+    {remindModal}
+    {toastEl}
     <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md cursor-pointer flex flex-col" onClick={() => { setActiveImg(0); setExpanded(true); }}>
       {firstImage ? (
         <img
@@ -614,9 +684,15 @@ export default function ListingCard({
             by <strong>{sellerProfile?.full_name || "Unknown"}</strong>
           </span>
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-            {!isMine && !expired && !listing.sold && (
+            {listing.sale_pending && !listing.sold && (
+              <Badge color="yellow">Pending Sale Confirmation</Badge>
+            )}
+            {!isMine && !expired && !listing.sold && !listing.sale_pending && (
               requested ? (
-                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
+                <>
+                  <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-3 py-1.5 text-[12px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
+                  <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1.5 text-[12px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
+                </>
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
@@ -630,7 +706,7 @@ export default function ListingCard({
             )}
             {markSoldButton}
             {ownerMenu}
-            {listing.sold && <Badge color="red">SOLD</Badge>}
+            {listing.sold && (listing.buyer_id === profile?.id ? <Badge color="green">Bought</Badge> : <Badge color="red">Sold</Badge>)}
           </div>
         </div>
       </div>

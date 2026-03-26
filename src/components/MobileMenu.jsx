@@ -1,7 +1,9 @@
 import { abbr } from "../utils/helpers";
+import { useAuth } from "../hooks/useAuth";
 import Button from "./ui/Button";
 
 export default function MobileMenu({ profile, onClose, onLogout, onNavigate }) {
+  const { pendingCount } = useAuth();
   return (
     <div className="fixed inset-0 z-[200] bg-black/50" onClick={onClose}>
       <div
@@ -41,10 +43,15 @@ export default function MobileMenu({ profile, onClose, onLogout, onNavigate }) {
             My Marketplaces
           </button>
           <button
-            className="text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 font-medium text-gray-700 bg-transparent border-none cursor-pointer"
+            className="text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 font-medium text-gray-700 bg-transparent border-none cursor-pointer flex items-center gap-2"
             onClick={() => onNavigate("/pending")}
           >
             My Listings
+            {pendingCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {pendingCount > 10 ? "10+" : pendingCount}
+              </span>
+            )}
           </button>
           <button
             className="text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 font-medium text-gray-700 bg-transparent border-none cursor-pointer"

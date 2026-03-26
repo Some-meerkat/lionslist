@@ -96,9 +96,10 @@ export default function MarketplaceDetailPage() {
   }
 
   const expired = marketplace?.expiry_date && new Date(marketplace.expiry_date) < new Date();
-  const othersActive = useMemo(() => listings.filter((l) => !l.sold && l.seller_id !== profile?.id), [listings, profile]);
+  const othersActive = useMemo(() => listings.filter((l) => !l.sold && !l.sale_pending && l.seller_id !== profile?.id), [listings, profile]);
   const sold = useMemo(() => listings.filter((l) => l.sold), [listings]);
-  const mine = useMemo(() => listings.filter((l) => l.seller_id === profile?.id && !l.sold), [listings, profile]);
+  const mine = useMemo(() => listings.filter((l) => l.seller_id === profile?.id && !l.sold && !l.sale_pending), [listings, profile]);
+  const pendingSale = useMemo(() => listings.filter((l) => l.sale_pending && !l.sold), [listings]);
 
   const filteredActive = useMemo(() => {
     let items = [...othersActive];
@@ -156,10 +157,19 @@ export default function MarketplaceDetailPage() {
     );
   };
 
-  const reactivate = async (listingId) => {
-    await supabase.from("listings").update({ sold: false, sold_price: null }).eq("id", listingId);
+  const confirmSale = async (listingId, soldPrice) => {
+    const update = { sold: true, sale_pending: false };
+    if (soldPrice !== undefined && soldPrice !== null) update.sold_price = Number(soldPrice);
+    await supabase.from("listings").update(update).eq("id", listingId);
     setListings((prev) =>
-      prev.map((l) => (l.id === listingId ? { ...l, sold: false, sold_price: null } : l))
+      prev.map((l) => (l.id === listingId ? { ...l, ...update } : l))
+    );
+  };
+
+  const reactivate = async (listingId) => {
+    await supabase.from("listings").update({ sold: false, sold_price: null, sale_pending: false, buyer_id: null }).eq("id", listingId);
+    setListings((prev) =>
+      prev.map((l) => (l.id === listingId ? { ...l, sold: false, sold_price: null, sale_pending: false, buyer_id: null } : l))
     );
   };
 
@@ -268,6 +278,7 @@ export default function MarketplaceDetailPage() {
   const tabs = [
     { k: "buy", l: "Buy", n: othersActive.length },
     { k: "sell", l: "Sell", n: mine.length },
+    { k: "pending_sale", l: "Pending", n: pendingSale.length },
     { k: "sold", l: "Sold", n: sold.length },
   ];
 
@@ -557,6 +568,31 @@ export default function MarketplaceDetailPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Pending Sale Tab */}
+      {tab === "pending_sale" && (
+        pendingSale.length === 0 ? (
+          <Card className="text-center !py-12 text-gray-400">
+            <div className="text-5xl mb-3">⏳</div>
+            <p>No items pending sale confirmation.</p>
+          </Card>
+        ) : (
+          <div className={marketplace.allow_pictures ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" : "grid grid-cols-1 gap-3"}>
+            {pendingSale.map((l) => (
+              <ListingCard
+                key={l.id}
+                listing={l}
+                marketplace={marketplace}
+                sellerProfile={sellers[l.seller_id]}
+                onMarkSold={(price) => confirmSale(l.id, price)}
+                onReactivate={reactivate}
+                expired={expired}
+                onUpdate={fetchData}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {/* Sold Tab */}

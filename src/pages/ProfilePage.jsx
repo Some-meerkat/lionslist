@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [form, setForm] = useState({});
   const [myListings, setMyListings] = useState([]);
   const [myMarketplaces, setMyMarketplaces] = useState([]);
+  const [boughtItems, setBoughtItems] = useState([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function ProfilePage() {
       });
       fetchMyListings();
       fetchMyMarketplaces();
+      fetchBoughtItems();
     }
   }, [profile]);
 
@@ -36,6 +38,16 @@ export default function ProfilePage() {
       .eq("seller_id", profile.id)
       .order("created_at", { ascending: false });
     setMyListings(data || []);
+  }
+
+  async function fetchBoughtItems() {
+    const { data } = await supabase
+      .from("listings")
+      .select("*, marketplaces(id, name, code), profiles!listings_seller_id_fkey(full_name)")
+      .eq("buyer_id", profile.id)
+      .eq("sold", true)
+      .order("created_at", { ascending: false });
+    setBoughtItems(data || []);
   }
 
   async function fetchMyMarketplaces() {
@@ -232,6 +244,51 @@ export default function ProfilePage() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </Card>
+      {/* Bought Items */}
+      <Card className="max-w-[600px] mx-auto mt-6">
+        <h3 className="m-0 mb-4 text-[#002B5C] font-semibold">
+          Bought Items ({boughtItems.length})
+        </h3>
+        {boughtItems.length === 0 ? (
+          <p className="text-gray-400 text-center py-6">
+            No purchased items yet.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {boughtItems.map((l) => (
+              <div
+                key={l.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                onClick={() =>
+                  l.marketplaces && navigate(`/marketplace/${l.marketplaces.code || l.marketplaces.id}`)
+                }
+              >
+                <div>
+                  <span className="font-medium text-sm">{l.name}</span>
+                  <span className="text-xs text-gray-400 ml-2">
+                    from {l.profiles?.full_name || "Unknown"}
+                  </span>
+                  <span className="text-xs text-gray-400 ml-2">
+                    in {l.marketplaces?.name || "Unknown"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {l.sold_price != null ? (
+                    <span className="text-green-600 font-semibold text-sm">
+                      ${l.sold_price}
+                    </span>
+                  ) : l.price > 0 ? (
+                    <span className="text-green-600 font-semibold text-sm">
+                      ${l.price}
+                    </span>
+                  ) : null}
+                  <Badge color="blue">Bought</Badge>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>
