@@ -20,7 +20,11 @@ export default function NavBar() {
       <div className="bg-[#1D4F91] text-white px-4 md:px-6 py-3 flex items-center justify-between shadow-md sticky top-0 z-50">
         <div
           className="text-xl md:text-[22px] font-bold tracking-tight cursor-pointer"
-          onClick={() => navigate("/home")}
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("lionslist:reset-home"));
+            navigate("/home");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
         >
           🦁 LionsList
         </div>

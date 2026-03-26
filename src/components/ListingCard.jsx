@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { CATEGORIES } from "../constants/categories";
 import { whatsappLink } from "../utils/helpers";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
+import { MoreVertical, Pencil, Trash2, CheckCircle, RotateCcw } from "lucide-react";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import ImageUpload from "./ImageUpload";
@@ -13,14 +14,19 @@ export default function ListingCard({
   marketplace,
   sellerProfile,
   onMarkSold,
+  onReactivate,
   onUpdate,
   expired,
 }) {
   const { profile } = useAuth();
   const isMine = listing.seller_id === profile?.id;
   const cat = CATEGORIES.find((c) => c.name === listing.category);
-  const images = listing.listing_images || [];
+  const images = (listing.listing_images || []).sort((a, b) => a.display_order - b.display_order);
   const firstImage = images.length > 0 ? images[0].image_url : null;
+  const [expanded, setExpanded] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null);
   const [requested, setRequested] = useState(false);
   const [requesting, setRequesting] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -33,6 +39,155 @@ export default function ListingCard({
     category: listing.category,
   });
   const [editImages, setEditImages] = useState([]);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const close = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showMenu]);
+
+  const [showReactivateConfirm, setShowReactivateConfirm] = useState(false);
+
+  const ownerMenu = isMine && !expired && (
+    <div className="relative" ref={menuRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setShowMenu((v) => !v)}
+        className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 border-none cursor-pointer transition-colors"
+      >
+        <MoreVertical size={16} className="text-gray-500" />
+      </button>
+      {showMenu && (
+        <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[160px]">
+          {!listing.sold && (
+            <>
+              <button
+                onClick={() => { setShowMenu(false); setActiveImg(0); setExpanded(true); startEditing(); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+              >
+                <Pencil size={14} /> Edit
+              </button>
+              <button
+                onClick={() => { setShowMenu(false); deleteListing(); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
+              >
+                <Trash2 size={14} /> Delete
+              </button>
+            </>
+          )}
+          {listing.sold && onReactivate && (
+            <button
+              onClick={() => { setShowMenu(false); setShowReactivateConfirm(true); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 bg-transparent border-none cursor-pointer hover:bg-emerald-50 transition-colors text-left"
+            >
+              <RotateCcw size={14} /> Reactivate
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const reactivateConfirmModal = showReactivateConfirm && (
+    <div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      onClick={() => setShowReactivateConfirm(false)}
+    >
+      <div
+        className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center mb-5">
+          <RotateCcw size={40} className="text-emerald-500 mx-auto mb-2" />
+          <h3 className="text-lg font-bold text-gray-900 m-0">Reactivate Listing</h3>
+          <p className="text-sm text-gray-500 mt-2">
+            This will mark <strong>{listing.name}</strong> as available for sale again.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => { onReactivate(listing.id); setShowReactivateConfirm(false); }}
+            className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-600 border-none rounded-lg cursor-pointer hover:bg-emerald-700 transition-colors"
+          >
+            Reactivate
+          </button>
+          <button
+            onClick={() => setShowReactivateConfirm(false)}
+            className="w-full py-2 text-sm text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const [showSoldConfirm, setShowSoldConfirm] = useState(false);
+  const [soldPrice, setSoldPrice] = useState("");
+
+  const markSoldButton = isMine && !listing.sold && !expired && onMarkSold && (
+    <button
+      onClick={(e) => { e.stopPropagation(); setSoldPrice(listing.price || ""); setShowSoldConfirm(true); }}
+      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors"
+    >
+      <CheckCircle size={14} /> Mark as Sold
+    </button>
+  );
+
+  const soldConfirmModal = showSoldConfirm && (
+    <div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      onClick={() => setShowSoldConfirm(false)}
+    >
+      <div
+        className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-center mb-4">
+          <div className="text-4xl mb-2">
+            <CheckCircle size={40} className="text-emerald-500 mx-auto" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 m-0">Confirm Sale</h3>
+          <p className="text-sm text-gray-500 mt-1">What price did you sell this item for?</p>
+        </div>
+        <div className="mb-4">
+          <label className="block text-xs font-semibold text-gray-700 mb-1">Sale Price</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="w-full pl-7 pr-3 py-2.5 rounded-lg border border-gray-300 text-sm outline-none focus:border-[#1D4F91] focus:ring-2 focus:ring-blue-100"
+              placeholder="0.00"
+              value={soldPrice}
+              onChange={(e) => setSoldPrice(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={() => { onMarkSold(listing.id, soldPrice || null); setShowSoldConfirm(false); }}
+            className="w-full py-2.5 text-sm font-semibold text-white bg-emerald-600 border-none rounded-lg cursor-pointer hover:bg-emerald-700 transition-colors"
+          >
+            Confirm Sale{soldPrice ? ` at $${Number(soldPrice).toFixed(2)}` : ""}
+          </button>
+          <button
+            onClick={() => { onMarkSold(listing.id, null); setShowSoldConfirm(false); }}
+            className="w-full py-2.5 text-sm font-medium text-gray-500 bg-transparent border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            Skip price & confirm sale
+          </button>
+          <button
+            onClick={() => setShowSoldConfirm(false)}
+            className="w-full py-2 text-sm text-gray-400 bg-transparent border-none cursor-pointer hover:text-gray-600 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const startEditing = () => {
     setEditForm({
@@ -145,6 +300,7 @@ export default function ListingCard({
         }
       } else {
         setRequested(true);
+        if (waLink !== "#") window.open(waLink, "_blank");
       }
     } catch (err) {
       alert("Failed to send request: " + err.message);
@@ -155,9 +311,127 @@ export default function ListingCard({
 
   const compact = !marketplace.allow_pictures && !firstImage;
 
+  const expandedModal = expanded && (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      onClick={() => setExpanded(false)}
+    >
+      <div
+        className="relative bg-white rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {images.length > 0 ? (
+          <div>
+            <img
+              src={images[activeImg]?.image_url}
+              alt={listing.name}
+              className="w-full h-[320px] object-contain bg-gray-100 rounded-t-2xl"
+            />
+            {images.length > 1 && (
+              <div className="flex gap-2 p-3 overflow-x-auto">
+                {images.map((img, i) => (
+                  <img
+                    key={img.id || i}
+                    src={img.image_url}
+                    alt=""
+                    onClick={() => setActiveImg(i)}
+                    className={`w-16 h-16 rounded-lg object-cover cursor-pointer shrink-0 border-2 transition-all ${i === activeImg ? "border-[#1D4F91] opacity-100" : "border-transparent opacity-60 hover:opacity-100"}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="w-full h-[200px] flex items-center justify-center text-6xl text-gray-300 bg-gray-100 rounded-t-2xl">
+            {cat?.icon || "\uD83D\uDCE6"}
+          </div>
+        )}
+        <div className="p-5">
+          {editing ? (
+            <EditForm
+              form={editForm}
+              setForm={setEditForm}
+              marketplace={marketplace}
+              images={editImages}
+              onImagesChange={setEditImages}
+              saving={saving}
+              onSave={async () => { await saveEdit(); setExpanded(false); }}
+              onCancel={() => { setEditing(false); setExpanded(false); }}
+              onDelete={deleteListing}
+            />
+          ) : (
+            <>
+              <div className="flex justify-between items-start">
+                <h2 className="m-0 text-xl font-bold">{listing.name}</h2>
+                {marketplace.pricing_mode !== "free" && listing.price != null ? (
+                  <span className="font-bold text-green-600 text-xl">${listing.price}</span>
+                ) : (
+                  marketplace.pricing_mode === "free" && <Badge color="green">FREE</Badge>
+                )}
+              </div>
+              <div className="flex gap-2 mt-3 text-sm text-gray-500 flex-wrap">
+                <span>Qty: {listing.quantity}</span>
+                <span>·</span>
+                <span>{cat?.icon} {listing.category}</span>
+                <span>·</span>
+                <span>{new Date(listing.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+              </div>
+              {listing.note && (
+                <p className="text-gray-600 text-sm mt-3 leading-relaxed">{listing.note}</p>
+              )}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <span className="text-sm text-gray-500">
+                  by <strong>{sellerProfile?.full_name || "Unknown"}</strong>
+                </span>
+              </div>
+              <div className="flex gap-2 mt-4 flex-wrap items-center">
+                {!isMine && !expired && !listing.sold && (
+                  requested ? (
+                    <Badge color="blue">Requested</Badge>
+                  ) : (
+                    <button
+                      onClick={handleRequest}
+                      disabled={requesting}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
+                    >
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
+                      {requesting ? "Sending..." : "Request to Buy"}
+                    </button>
+                  )
+                )}
+                {markSoldButton}
+                {isMine && !listing.sold && !expired && (
+                  <button
+                    onClick={deleteListing}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-500 border-none rounded-lg cursor-pointer hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 size={14} /> Delete Listing
+                  </button>
+                )}
+                {listing.sold && <Badge color="red">SOLD</Badge>}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="absolute top-3 right-3 flex items-center gap-2">
+          <button
+            onClick={() => setExpanded(false)}
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-black/40 text-white border-none cursor-pointer text-lg hover:bg-black/60 transition-colors"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (compact) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md p-4">
+      <>
+      {expandedModal}
+      {soldConfirmModal}
+      {reactivateConfirmModal}
+      <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md p-4 cursor-pointer" onClick={() => { setActiveImg(0); setExpanded(true); }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <span className="text-xl shrink-0">{cat?.icon || "\uD83D\uDCE6"}</span>
@@ -172,84 +446,59 @@ export default function ListingCard({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
             {marketplace.pricing_mode !== "free" && listing.price != null ? (
               <span className="font-bold text-green-600">${listing.price}</span>
             ) : (
               marketplace.pricing_mode === "free" && <Badge color="green">FREE</Badge>
             )}
             {!isMine && !expired && !listing.sold && (
-              <>
-                {requested ? (
-                  <Badge color="blue">Requested</Badge>
-                ) : (
-                  <Button small onClick={handleRequest} disabled={requesting}>
-                    {requesting ? "..." : "Request"}
-                  </Button>
-                )}
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
+              requested ? (
+                <Badge color="blue">Requested</Badge>
+              ) : (
+                <button
+                  onClick={handleRequest}
+                  disabled={requesting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
                 >
-                  Message
-                </a>
-              </>
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-3.5 h-3.5" />
+                  {requesting ? "..." : "Request"}
+                </button>
+              )
             )}
-            {isMine && !listing.sold && !expired && (
-              <>
-                <Button small variant="secondary" onClick={startEditing}>
-                  Edit
-                </Button>
-                <Button small variant="danger" onClick={deleteListing}>
-                  Delete
-                </Button>
-                {onMarkSold && (
-                  <Button small variant="success" onClick={() => onMarkSold(listing.id)}>
-                    Sold
-                  </Button>
-                )}
-              </>
-            )}
+            {markSoldButton}
+            {ownerMenu}
             {listing.sold && <Badge color="red">SOLD</Badge>}
           </div>
         </div>
-        {listing.note && !editing && (
+        {listing.note && (
           <p className="text-gray-500 text-[12px] mt-2 ml-9 leading-relaxed m-0">
             {listing.note}
           </p>
         )}
-        {editing && (
-          <EditForm
-            form={editForm}
-            setForm={setEditForm}
-            marketplace={marketplace}
-            images={editImages}
-            onImagesChange={setEditImages}
-            saving={saving}
-            onSave={saveEdit}
-            onCancel={() => setEditing(false)}
-          />
-        )}
       </div>
+      </>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl overflow-hidden border border-gray-200 transition-all hover:shadow-md">
+    <>
+    {expandedModal}
+    {soldConfirmModal}
+    {reactivateConfirmModal}
+    <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md cursor-pointer flex flex-col" onClick={() => { setActiveImg(0); setExpanded(true); }}>
       {firstImage ? (
         <img
           src={firstImage}
           alt={listing.name}
-          className="w-full h-[180px] object-cover bg-gray-100"
+          className="w-full h-[180px] object-cover bg-gray-100 rounded-t-xl"
         />
       ) : (
-        <div className="w-full h-[180px] flex items-center justify-center text-5xl text-gray-300 bg-gray-100">
+        <div className="w-full h-[180px] flex items-center justify-center text-5xl text-gray-300 bg-gray-100 rounded-t-xl">
           📦
         </div>
       )}
-      <div className="p-4">
+      <div className="p-4 flex flex-col flex-1">
         <div className="flex justify-between items-start">
           <h3 className="m-0 text-base font-semibold">{listing.name}</h3>
           {marketplace.pricing_mode !== "free" && listing.price != null ? (
@@ -276,74 +525,37 @@ export default function ListingCard({
             {listing.note}
           </p>
         )}
-        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
+        <div className="mt-auto pt-3 border-t border-gray-100 flex justify-between items-center">
           <span className="text-[13px] text-gray-500">
             by <strong>{sellerProfile?.full_name || "Unknown"}</strong>
           </span>
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             {!isMine && !expired && !listing.sold && (
-              <>
-                {requested ? (
-                  <Badge color="blue">Requested</Badge>
-                ) : (
-                  <Button
-                    small
-                    onClick={handleRequest}
-                    disabled={requesting}
-                  >
-                    {requesting ? "Sending..." : "Request to Buy"}
-                  </Button>
-                )}
-                <a
-                  href={waLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
+              requested ? (
+                <Badge color="blue">Requested</Badge>
+              ) : (
+                <button
+                  onClick={handleRequest}
+                  disabled={requesting}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
                 >
-                  Message
-                </a>
-              </>
+                  <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
+                  {requesting ? "Sending..." : "Request to Buy"}
+                </button>
+              )
             )}
-            {isMine && !listing.sold && !expired && (
-              <>
-                <Button small variant="secondary" onClick={startEditing}>
-                  Edit
-                </Button>
-                <Button small variant="danger" onClick={deleteListing}>
-                  Delete
-                </Button>
-                {onMarkSold && (
-                  <Button
-                    small
-                    variant="success"
-                    onClick={() => onMarkSold(listing.id)}
-                  >
-                    Mark as Sold
-                  </Button>
-                )}
-              </>
-            )}
+            {markSoldButton}
+            {ownerMenu}
             {listing.sold && <Badge color="red">SOLD</Badge>}
           </div>
         </div>
-        {editing && (
-          <EditForm
-            form={editForm}
-            setForm={setEditForm}
-            marketplace={marketplace}
-            images={editImages}
-            onImagesChange={setEditImages}
-            saving={saving}
-            onSave={saveEdit}
-            onCancel={() => setEditing(false)}
-          />
-        )}
       </div>
     </div>
+    </>
   );
 }
 
-function EditForm({ form, setForm, marketplace, images, onImagesChange, saving, onSave, onCancel }) {
+function EditForm({ form, setForm, marketplace, images, onImagesChange, saving, onSave, onCancel, onDelete }) {
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
       <input
@@ -392,11 +604,19 @@ function EditForm({ form, setForm, marketplace, images, onImagesChange, saving, 
       {marketplace.allow_pictures && (
         <ImageUpload images={images} onChange={onImagesChange} />
       )}
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <Button small variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button small onClick={onSave} disabled={saving}>
           {saving ? "Saving..." : "Save"}
         </Button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold text-red-600 bg-transparent border-none cursor-pointer hover:text-red-800 transition-colors"
+          >
+            <Trash2 size={13} /> Delete
+          </button>
+        )}
       </div>
     </div>
   );

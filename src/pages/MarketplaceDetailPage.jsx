@@ -32,8 +32,9 @@ export default function MarketplaceDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", description: "" });
   const [saving, setSaving] = useState(false);
+  const [itemSearch, setItemSearch] = useState("");
+  const [showItemSuggestions, setShowItemSuggestions] = useState(false);
   const [filters, setFilters] = useState({
-    category: "",
     priceMin: "",
     priceMax: "",
     sort: "newest",
@@ -95,20 +96,40 @@ export default function MarketplaceDetailPage() {
   }
 
   const expired = marketplace?.expiry_date && new Date(marketplace.expiry_date) < new Date();
-  const active = listings.filter((l) => !l.sold);
-  const sold = listings.filter((l) => l.sold);
-  const mine = listings.filter((l) => l.seller_id === profile?.id && !l.sold);
+  const othersActive = useMemo(() => listings.filter((l) => !l.sold && l.seller_id !== profile?.id), [listings, profile]);
+  const sold = useMemo(() => listings.filter((l) => l.sold), [listings]);
+  const mine = useMemo(() => listings.filter((l) => l.seller_id === profile?.id && !l.sold), [listings, profile]);
 
   const filteredActive = useMemo(() => {
-    let items = [...active];
-    if (filters.category) items = items.filter((l) => l.category === filters.category);
+    let items = [...othersActive];
+    if (itemSearch.trim()) {
+      const q = itemSearch.trim().toLowerCase();
+      items = items.filter((l) => l.name.toLowerCase().includes(q));
+    }
     if (filters.priceMin) items = items.filter((l) => l.price >= Number(filters.priceMin));
     if (filters.priceMax) items = items.filter((l) => l.price <= Number(filters.priceMax));
     if (filters.sort === "price-asc") items.sort((a, b) => a.price - b.price);
     else if (filters.sort === "price-desc") items.sort((a, b) => b.price - a.price);
     // newest is default order from DB
     return items;
-  }, [active, filters]);
+  }, [othersActive, itemSearch, filters]);
+
+  const itemSuggestions = useMemo(() => {
+    if (!itemSearch.trim() || itemSearch.trim().length < 2) return [];
+    const q = itemSearch.trim().toLowerCase();
+    const seen = new Set();
+    const results = [];
+    for (const l of othersActive) {
+      if (!l.name.toLowerCase().includes(q)) continue;
+      if (seen.has(l.name.toLowerCase())) continue;
+      seen.add(l.name.toLowerCase());
+      const catIcon = CATEGORIES.find((c) => c.name === l.category)?.icon;
+      const price = Number(l.price) === 0 ? "FREE" : `$${Number(l.price).toFixed(0)}`;
+      results.push({ label: l.name, sub: `${price} · ${l.category}`, icon: catIcon });
+      if (results.length >= 6) break;
+    }
+    return results;
+  }, [itemSearch, othersActive]);
 
   const copyCode = async () => {
     const code = marketplace?.code || id;
@@ -126,10 +147,19 @@ export default function MarketplaceDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const markSold = async (listingId) => {
-    await supabase.from("listings").update({ sold: true }).eq("id", listingId);
+  const markSold = async (listingId, soldPrice) => {
+    const update = { sold: true };
+    if (soldPrice !== undefined && soldPrice !== null) update.sold_price = Number(soldPrice);
+    await supabase.from("listings").update(update).eq("id", listingId);
     setListings((prev) =>
-      prev.map((l) => (l.id === listingId ? { ...l, sold: true } : l))
+      prev.map((l) => (l.id === listingId ? { ...l, ...update } : l))
+    );
+  };
+
+  const reactivate = async (listingId) => {
+    await supabase.from("listings").update({ sold: false, sold_price: null }).eq("id", listingId);
+    setListings((prev) =>
+      prev.map((l) => (l.id === listingId ? { ...l, sold: false, sold_price: null } : l))
     );
   };
 
@@ -236,7 +266,7 @@ export default function MarketplaceDetailPage() {
   const creatorName = sellers[marketplace.creator_id]?.full_name || "Unknown";
 
   const tabs = [
-    { k: "buy", l: "Buy", n: active.length },
+    { k: "buy", l: "Buy", n: othersActive.length },
     { k: "sell", l: "Sell", n: mine.length },
     { k: "sold", l: "Sold", n: sold.length },
   ];
@@ -448,7 +478,15 @@ export default function MarketplaceDetailPage() {
       {/* Buy Tab */}
       {tab === "buy" && (
         <>
-          <SearchFilters filters={filters} onChange={setFilters} />
+          <SearchFilters
+            filters={filters}
+            onChange={setFilters}
+            itemSearch={itemSearch}
+            onItemSearchChange={setItemSearch}
+            showItemSuggestions={showItemSuggestions}
+            onShowItemSuggestions={setShowItemSuggestions}
+            itemSuggestions={itemSuggestions}
+          />
           {filteredActive.length === 0 ? (
             <Card className="text-center !py-12 text-gray-400">
               <div className="text-5xl mb-3">🛒</div>
@@ -462,6 +500,7 @@ export default function MarketplaceDetailPage() {
                   listing={l}
                   marketplace={marketplace}
                   sellerProfile={sellers[l.seller_id]}
+                  onMarkSold={markSold}
                   expired={expired}
                   onUpdate={fetchData}
                 />
@@ -535,7 +574,9 @@ export default function MarketplaceDetailPage() {
                 listing={l}
                 marketplace={marketplace}
                 sellerProfile={sellers[l.seller_id]}
+                onReactivate={reactivate}
                 expired={expired}
+                onUpdate={fetchData}
               />
             ))}
           </div>

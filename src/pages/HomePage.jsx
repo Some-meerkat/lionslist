@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { CATEGORIES } from "../constants/categories";
@@ -17,9 +17,9 @@ export default function HomePage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [marketplaces, setMarketplaces] = useState([]);
+  const [allListings, setAllListings] = useState([]);
   const [creators, setCreators] = useState({});
   const [search, setSearch] = useState("");
-  const [joinLink, setJoinLink] = useState("");
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -28,11 +28,24 @@ export default function HomePage() {
     school: "",
     sort: "recent",
   });
+  const [showMarketplaceResults, setShowMarketplaceResults] = useState(false);
   const [pendingBuy, setPendingBuy] = useState([]);
   const [pendingSell, setPendingSell] = useState([]);
 
   useEffect(() => {
     fetchMarketplaces();
+  }, []);
+
+  useEffect(() => {
+    const resetHome = () => {
+      setSearch("");
+      setFilters({ category: "", school: "", sort: "recent" });
+      setShowFilters(false);
+      setShowSuggestions(false);
+      setShowMarketplaceResults(false);
+    };
+    window.addEventListener("lionslist:reset-home", resetHome);
+    return () => window.removeEventListener("lionslist:reset-home", resetHome);
   }, []);
 
   useEffect(() => {
@@ -90,6 +103,14 @@ export default function HomePage() {
       listing_count: m.listings?.[0]?.count || 0,
     }));
     setMarketplaces(withCounts);
+
+    // Fetch all active listings with images and seller info
+    const { data: listings } = await supabase
+      .from("listings")
+      .select("id, name, price, category, quantity, note, sold, marketplace_id, seller_id, created_at, listing_images(image_url, display_order), profiles(full_name, whatsapp)")
+      .eq("sold", false)
+      .order("created_at", { ascending: false });
+    setAllListings(listings || []);
 
     // Fetch creator profiles
     if (data?.length) {
@@ -155,32 +176,74 @@ export default function HomePage() {
     return list;
   }, [visible, creators, search, filters]);
 
+  // Build a marketplace lookup for listings
+  const marketplaceMap = useMemo(() => {
+    const map = {};
+    for (const m of marketplaces) map[m.id] = m;
+    return map;
+  }, [marketplaces]);
+
+  // Filtered items as a flat sorted list
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.trim().toLowerCase();
+    let matching = allListings.filter((l) => {
+      if (!l.name.toLowerCase().includes(q)) return false;
+      const m = marketplaceMap[l.marketplace_id];
+      if (!m || isExpired(m)) return false;
+      if (m.school_restrictions?.length > 0 && !m.school_restrictions.includes(profile?.school)) return false;
+      if (filters.category && m.category !== filters.category) return false;
+      return true;
+    });
+    if (filters.sort === "popular") {
+      matching = [...matching].sort((a, b) => Number(b.price) - Number(a.price));
+    } else {
+      matching = [...matching].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+    return matching;
+  }, [search, allListings, marketplaceMap, filters, profile]);
+
   // Autocomplete suggestions
   const suggestions = useMemo(() => {
     if (!search.trim() || search.trim().length < 2) return [];
     const q = search.trim().toLowerCase();
     const seen = new Set();
-    const items = [];
+    const mktResults = [];
+    const itemResults = [];
 
     for (const m of marketplaces) {
       if (isExpired(m)) continue;
       if (m.name.toLowerCase().includes(q) && !seen.has("m:" + m.id)) {
         seen.add("m:" + m.id);
         const catIcon = CATEGORIES.find((c) => c.name === m.category)?.icon;
-        items.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, code: m.code || m.id });
+        mktResults.push({ type: "marketplace", label: m.name, sub: m.category, icon: catIcon, code: m.code || m.id });
       }
     }
     for (const [id, name] of Object.entries(creators)) {
       if (name.toLowerCase().includes(q) && !seen.has("c:" + id)) {
         seen.add("c:" + id);
-        items.push({ type: "creator", label: name, sub: "Creator" });
+        mktResults.push({ type: "creator", label: name, sub: "Creator" });
       }
     }
-    return items.slice(0, 6);
-  }, [search, marketplaces, creators]);
+    for (const l of allListings) {
+      if (!l.name.toLowerCase().includes(q)) continue;
+      const m = marketplaceMap[l.marketplace_id];
+      if (!m || isExpired(m)) continue;
+      const price = Number(l.price) === 0 ? "FREE" : `$${Number(l.price).toFixed(0)}`;
+      itemResults.push({
+        type: "item",
+        label: l.name,
+        sub: `${price} · in ${m.name}`,
+        icon: CATEGORIES.find((c) => c.name === l.category)?.icon,
+        code: m.code || m.id,
+      });
+      if (itemResults.length >= 4) break;
+    }
+    return [...mktResults.slice(0, 3), ...itemResults];
+  }, [search, marketplaces, allListings, marketplaceMap, creators]);
 
   const handleSuggestionClick = (s) => {
-    if (s.type === "marketplace") {
+    if (s.type === "marketplace" || s.type === "item") {
       navigate(`/marketplace/${s.code}`);
     } else {
       setSearch(s.label);
@@ -192,17 +255,6 @@ export default function HomePage() {
     (filters.sort !== "recent" ? 1 : 0);
 
   const isSearching = search.trim() || filters.category || filters.school || filters.sort !== "recent";
-
-  const handleJoin = async () => {
-    const input = joinLink.trim().split("/").pop().split("?")[0];
-    if (!input) {
-      alert("Please enter a valid marketplace link or code.");
-      return;
-    }
-    // Check if it's a UUID (direct ID) or a code
-    // Navigate directly — the detail page handles both UUIDs and codes
-    navigate(`/marketplace/${input}`);
-  };
 
   return (
     <div className="bg-gray-50 min-h-screen">
@@ -237,26 +289,7 @@ export default function HomePage() {
       </div>
 
       {/* All content below hero */}
-      <div className="max-w-screen-xl mx-auto px-8 py-8 space-y-8">
-        {/* Join section */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <p className="font-semibold text-gray-700 mb-3">Find a Marketplace via Link</p>
-          <div className="flex gap-2">
-            <input
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-              placeholder="Paste marketplace code or link..."
-              value={joinLink}
-              onChange={(e) => setJoinLink(e.target.value)}
-            />
-            <button
-              onClick={handleJoin}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium cursor-pointer border-none hover:bg-blue-700 transition-colors"
-            >
-              Find
-            </button>
-          </div>
-        </div>
-
+      <div className="max-w-screen-xl mx-auto px-8 py-5 space-y-5">
         {/* Search bar with autocomplete and filters */}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-2">
@@ -264,13 +297,16 @@ export default function HomePage() {
               <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input
                 className="w-full border border-gray-300 rounded-full pl-10 pr-10 py-3 bg-white shadow-sm text-sm outline-none focus:border-[#1D4F91] focus:ring-2 focus:ring-blue-100 transition-all"
-                placeholder="Search by name, creator, or link..."
+                placeholder="Search by item, marketplace, or creator..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
                   setShowSuggestions(true);
+                  setShowMarketplaceResults(false);
                 }}
                 onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                onKeyDown={(e) => { if (e.key === "Enter") setShowSuggestions(false); }}
               />
               {search && (
                 <button
@@ -282,25 +318,54 @@ export default function HomePage() {
               )}
 
               {/* Autocomplete dropdown */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50">
-                  {suggestions.map((s, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleSuggestionClick(s)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left bg-transparent border-none cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors border-b border-gray-100 last:border-b-0"
-                    >
-                      <span className="text-lg w-6 text-center shrink-0">
-                        {s.icon || (s.type === "creator" ? "\uD83D\uDC64" : "\uD83D\uDCE6")}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{s.label}</p>
-                        <p className="text-xs text-gray-400">{s.sub}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              {showSuggestions && suggestions.length > 0 && (() => {
+                const mktSuggestions = suggestions.filter((s) => s.type === "marketplace" || s.type === "creator");
+                const itemSuggestions = suggestions.filter((s) => s.type === "item");
+                return (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50">
+                    {mktSuggestions.length > 0 && (
+                      <>
+                        <p className="px-4 pt-2.5 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide m-0">Marketplaces</p>
+                        {mktSuggestions.map((s, i) => (
+                          <button
+                            key={"m" + i}
+                            onClick={() => handleSuggestionClick(s)}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left bg-transparent border-none cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                          >
+                            <span className="text-lg w-6 text-center shrink-0">
+                              {s.icon || (s.type === "creator" ? "\uD83D\uDC64" : "\uD83D\uDCE6")}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{s.label}</p>
+                              <p className="text-xs text-gray-400">{s.sub}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    {itemSuggestions.length > 0 && (
+                      <>
+                        <p className={`px-4 pt-2.5 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wide m-0 ${mktSuggestions.length > 0 ? "border-t border-gray-100" : ""}`}>Items</p>
+                        {itemSuggestions.map((s, i) => (
+                          <button
+                            key={"i" + i}
+                            onClick={() => handleSuggestionClick(s)}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-left bg-transparent border-none cursor-pointer hover:bg-gray-50 active:bg-gray-100 transition-colors"
+                          >
+                            <span className="text-lg w-6 text-center shrink-0">
+                              {s.icon || "\uD83D\uDCE6"}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">{s.label}</p>
+                              <p className="text-xs text-gray-400">{s.sub}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -366,23 +431,112 @@ export default function HomePage() {
           )}
         </div>
 
+        {/* Collapsible marketplace results — right below search bar */}
+        {isSearching && filtered?.length > 0 && filteredItems.length > 0 && (
+          <div onClick={() => setShowSuggestions(false)}>
+            <button
+              onClick={() => setShowMarketplaceResults((v) => !v)}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-600 bg-transparent border-none cursor-pointer p-0 hover:text-gray-900"
+            >
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${showMarketplaceResults ? "rotate-0" : "-rotate-90"}`}
+              />
+              {filtered.length} marketplace{filtered.length !== 1 ? "s" : ""} found
+            </button>
+            {showMarketplaceResults && (
+              <div className="grid gap-4 mt-3">
+                {filtered.map((m) => (
+                  <MarketplaceCard key={m.id} marketplace={m} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Search results */}
         {isSearching && (
           <div onClick={() => setShowSuggestions(false)}>
-            {filtered?.length === 0 ? (
+            {filtered?.length === 0 && filteredItems.length === 0 ? (
               <p className="text-gray-400 text-center py-6">
-                No marketplaces found{search.trim() ? ` for \u201C${search}\u201D` : ""}
+                No results found{search.trim() ? ` for \u201C${search}\u201D` : ""}
               </p>
             ) : (
               <>
-                <p className="text-sm text-gray-400 mb-3">
-                  {filtered?.length} marketplace{filtered?.length !== 1 ? "s" : ""} found
-                </p>
-                <div className="grid gap-4">
-                  {filtered?.map((m) => (
-                    <MarketplaceCard key={m.id} marketplace={m} />
-                  ))}
-                </div>
+                {/* Marketplace results shown expanded when no items match */}
+                {filtered?.length > 0 && filteredItems.length === 0 && (
+                  <>
+                    <p className="text-sm text-gray-400 mb-3">
+                      {filtered.length} marketplace{filtered.length !== 1 ? "s" : ""} found
+                    </p>
+                    <div className="grid gap-4">
+                      {filtered.map((m) => (
+                        <MarketplaceCard key={m.id} marketplace={m} />
+                      ))}
+                    </div>
+                  </>
+                )}
+
+                {/* Items — flat grid sorted by user preference */}
+                {filteredItems.length > 0 && (
+                  <div>
+                    <p className="text-sm text-gray-400 mb-3">
+                      {filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""} found
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {filteredItems.map((item) => {
+                        const m = marketplaceMap[item.marketplace_id];
+                        const catIcon = CATEGORIES.find((c) => c.name === item.category)?.icon;
+                        const imgs = (item.listing_images || []).sort((a, b) => a.display_order - b.display_order);
+                        const firstImage = imgs[0]?.image_url;
+                        const sellerName = item.profiles?.full_name || "Unknown";
+                        return (
+                          <div
+                            key={item.id}
+                            className="bg-white rounded-xl overflow-hidden border border-gray-200 transition-all hover:shadow-md"
+                          >
+                            {firstImage ? (
+                              <img src={firstImage} alt={item.name} className="w-full h-[160px] object-cover bg-gray-100" />
+                            ) : (
+                              <div className="w-full h-[160px] flex items-center justify-center text-4xl text-gray-300 bg-gray-100">
+                                {catIcon || "\uD83D\uDCE6"}
+                              </div>
+                            )}
+                            <div className="p-3">
+                              <div className="flex justify-between items-start">
+                                <h3 className="m-0 text-sm font-semibold truncate">{item.name}</h3>
+                                <span className="font-bold text-green-600 text-sm shrink-0 ml-2">
+                                  {Number(item.price) === 0 ? "FREE" : `$${Number(item.price).toFixed(0)}`}
+                                </span>
+                              </div>
+                              <div className="flex gap-1.5 mt-1.5 text-xs text-gray-400 flex-wrap">
+                                <span>Qty: {item.quantity}</span>
+                                <span>·</span>
+                                <span>{catIcon} {item.category}</span>
+                                <span>·</span>
+                                <span>{new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                              </div>
+                              {item.note && (
+                                <p className="text-gray-500 text-xs mt-1.5 leading-relaxed m-0 line-clamp-2">{item.note}</p>
+                              )}
+                              <div className="mt-2.5 pt-2.5 border-t border-gray-100 flex justify-between items-center">
+                                <span className="text-xs text-gray-500">
+                                  by <strong>{sellerName}</strong>
+                                </span>
+                                <button
+                                  onClick={() => navigate(`/marketplace/${m?.code || m?.id}`)}
+                                  className="text-xs font-semibold text-[#1D4F91] bg-transparent border-none cursor-pointer hover:underline p-0"
+                                >
+                                  View in {m?.name}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )}
             {filters.category && (
