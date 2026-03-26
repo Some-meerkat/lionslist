@@ -16,8 +16,9 @@ export function slugify(name) {
 
 export function whatsappLink(phone, listingName, marketplaceName) {
   const clean = (phone || "").replace(/[^0-9+]/g, "");
+  if (!clean) return null;
   const text = encodeURIComponent(
     `Hi! I'm interested in "${listingName}" on LionsList (${marketplaceName})`
   );
-  return `https://wa.me/${clean}?text=${text}`;
+  return `https://api.whatsapp.com/send?phone=${clean}&text=${text}`;
 }

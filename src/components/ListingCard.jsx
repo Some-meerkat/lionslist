@@ -29,6 +29,9 @@ export default function ListingCard({
   const menuRef = useRef(null);
   const [requested, setRequested] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [showUnrequest, setShowUnrequest] = useState(false);
+  const [unrequestReason, setUnrequestReason] = useState("");
+  const [unrequestOther, setUnrequestOther] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -281,33 +284,94 @@ export default function ListingCard({
 
   const waLink = sellerProfile
     ? whatsappLink(sellerProfile.whatsapp, listing.name, marketplace.name)
-    : "#";
+    : null;
 
-  const handleRequest = async () => {
-    if (!profile) return;
-    setRequesting(true);
+  const handleRequest = (e) => {
+    if (!profile || !waLink) {
+      if (e) e.preventDefault();
+      return;
+    }
+    // Fire-and-forget the DB insert — the <a> tag handles WhatsApp navigation
+    supabase.from("buy_requests").insert({
+      listing_id: listing.id,
+      buyer_id: profile.id,
+      message: `Interested in "${listing.name}"`,
+    }).then(() => {
+      setRequested(true);
+    }).catch(() => {
+      setRequested(true);
+    });
+    // Don't prevent default — let the <a> navigate to WhatsApp
+  };
+
+  const handleUnrequest = async () => {
     try {
-      const { error } = await supabase.from("buy_requests").insert({
-        listing_id: listing.id,
-        buyer_id: profile.id,
-        message: `Interested in "${listing.name}"`,
-      });
-      if (error) {
-        if (error.code === "23505") {
-          alert("You've already requested this item.");
-        } else {
-          throw error;
-        }
-      } else {
-        setRequested(true);
-        if (waLink !== "#") window.open(waLink, "_blank");
-      }
-    } catch (err) {
-      alert("Failed to send request: " + err.message);
-    } finally {
-      setRequesting(false);
+      await supabase
+        .from("buy_requests")
+        .delete()
+        .eq("listing_id", listing.id)
+        .eq("buyer_id", profile.id);
+      setRequested(false);
+      setShowUnrequest(false);
+      setUnrequestReason("");
+      setUnrequestOther("");
+    } catch {
+      // silently handle
     }
   };
+
+  const unrequestModal = showUnrequest && (
+    <div
+      className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+      onClick={() => setShowUnrequest(false)}
+    >
+      <div
+        className="bg-white rounded-2xl max-w-sm w-full shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-bold text-gray-900 m-0 mb-1">Do you want to cancel this request?</h3>
+        <p className="text-sm text-gray-500 mt-0 mb-1">Reason to cancel</p>
+        <div className="mb-4 space-y-3">
+          <select
+            value={unrequestReason}
+            onChange={(e) => { setUnrequestReason(e.target.value); if (e.target.value !== "Other") setUnrequestOther(""); }}
+            className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 bg-white text-gray-700 outline-none focus:border-[#1D4F91] focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="">Select a reason...</option>
+            <option value="Seller is not responding">Seller is not responding</option>
+            <option value="Changed my mind">Changed my mind</option>
+            <option value="Bought another item">Bought another item</option>
+            <option value="Requested by accident">Requested by accident</option>
+            <option value="Other">Other</option>
+          </select>
+          {unrequestReason === "Other" && (
+            <input
+              type="text"
+              placeholder="Please specify (optional)"
+              value={unrequestOther}
+              onChange={(e) => setUnrequestOther(e.target.value)}
+              className="w-full px-4 py-2.5 text-sm rounded-lg border border-gray-300 outline-none focus:border-[#1D4F91] focus:ring-2 focus:ring-blue-100"
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={handleUnrequest}
+            disabled={!unrequestReason}
+            className="w-full py-2.5 text-sm font-semibold text-white bg-red-500 border-none rounded-lg cursor-pointer hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Cancel Request
+          </button>
+          <button
+            onClick={() => { setShowUnrequest(false); setUnrequestReason(""); setUnrequestOther(""); }}
+            className="w-full py-2.5 text-sm font-semibold text-white bg-[#1D4F91] border-none rounded-lg cursor-pointer hover:bg-[#163d73] transition-colors"
+          >
+            Keep Request
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   const compact = !marketplace.allow_pictures && !firstImage;
 
@@ -387,16 +451,18 @@ export default function ListingCard({
               <div className="flex gap-2 mt-4 flex-wrap items-center">
                 {!isMine && !expired && !listing.sold && (
                   requested ? (
-                    <Badge color="blue">Requested</Badge>
+                    <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full cursor-pointer hover:bg-blue-100 transition-colors">Requested</button>
                   ) : (
-                    <button
+                    <a
+                      href={waLink || undefined}
+                      target={waLink ? "_blank" : undefined}
+                      rel={waLink ? "noopener noreferrer" : undefined}
                       onClick={handleRequest}
-                      disabled={requesting}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
                     >
                       <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
                       {requesting ? "Sending..." : "Request to Buy"}
-                    </button>
+                    </a>
                   )
                 )}
                 {markSoldButton}
@@ -431,6 +497,7 @@ export default function ListingCard({
       {expandedModal}
       {soldConfirmModal}
       {reactivateConfirmModal}
+      {unrequestModal}
       <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md p-4 cursor-pointer" onClick={() => { setActiveImg(0); setExpanded(true); }}>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -454,16 +521,18 @@ export default function ListingCard({
             )}
             {!isMine && !expired && !listing.sold && (
               requested ? (
-                <Badge color="blue">Requested</Badge>
+                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full cursor-pointer hover:bg-blue-100 transition-colors">Requested</button>
               ) : (
-                <button
+                <a
+                  href={waLink || undefined}
+                  target={waLink ? "_blank" : undefined}
+                  rel={waLink ? "noopener noreferrer" : undefined}
                   onClick={handleRequest}
-                  disabled={requesting}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
                 >
                   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-3.5 h-3.5" />
                   {requesting ? "..." : "Request"}
-                </button>
+                </a>
               )
             )}
             {markSoldButton}
@@ -486,6 +555,7 @@ export default function ListingCard({
     {expandedModal}
     {soldConfirmModal}
     {reactivateConfirmModal}
+    {unrequestModal}
     <div className="bg-white rounded-xl border border-gray-200 transition-all hover:shadow-md cursor-pointer flex flex-col" onClick={() => { setActiveImg(0); setExpanded(true); }}>
       {firstImage ? (
         <img
@@ -532,16 +602,18 @@ export default function ListingCard({
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             {!isMine && !expired && !listing.sold && (
               requested ? (
-                <Badge color="blue">Requested</Badge>
+                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-full cursor-pointer hover:bg-blue-100 transition-colors">Requested</button>
               ) : (
-                <button
+                <a
+                  href={waLink || undefined}
+                  target={waLink ? "_blank" : undefined}
+                  rel={waLink ? "noopener noreferrer" : undefined}
                   onClick={handleRequest}
-                  disabled={requesting}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white border-none rounded-lg cursor-pointer hover:bg-[#1fb855] transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
                 >
                   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
                   {requesting ? "Sending..." : "Request to Buy"}
-                </button>
+                </a>
               )
             )}
             {markSoldButton}
