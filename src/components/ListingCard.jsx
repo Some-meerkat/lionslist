@@ -18,7 +18,7 @@ export default function ListingCard({
   onUpdate,
   expired,
 }) {
-  const { profile } = useAuth();
+  const { profile, refreshPending } = useAuth();
   const isMine = listing.seller_id === profile?.id;
   const cat = CATEGORIES.find((c) => c.name === listing.category);
   const images = (listing.listing_images || []).sort((a, b) => a.display_order - b.display_order);
@@ -29,6 +29,19 @@ export default function ListingCard({
   const menuRef = useRef(null);
   const [requested, setRequested] = useState(false);
   const [requesting, setRequesting] = useState(false);
+
+  // Check if user already requested this listing
+  useEffect(() => {
+    if (!profile) return;
+    supabase
+      .from("buy_requests")
+      .select("id")
+      .eq("listing_id", listing.id)
+      .eq("buyer_id", profile.id)
+      .then(({ data }) => {
+        if (data?.length > 0) setRequested(true);
+      });
+  }, [listing.id, profile]);
   const [showUnrequest, setShowUnrequest] = useState(false);
   const [unrequestReason, setUnrequestReason] = useState("");
   const [unrequestOther, setUnrequestOther] = useState("");
@@ -287,19 +300,23 @@ export default function ListingCard({
     : null;
 
   const handleRequest = (e) => {
-    if (!profile || !waLink) {
-      if (e) e.preventDefault();
-      return;
-    }
-    // Fire-and-forget the DB insert — the <a> tag handles WhatsApp navigation
+    // Prevent the <a> from navigating — we'll open WhatsApp manually after insert
+    if (e) e.preventDefault();
+    if (!profile) return;
+    setRequesting(true);
     supabase.from("buy_requests").insert({
       listing_id: listing.id,
       buyer_id: profile.id,
       message: `Interested in "${listing.name}"`,
-    }).then(() => {
+    }).then(({ error }) => {
+      if (error && error.code !== "23505") {
+        console.error("Buy request error:", error.message);
+      }
       setRequested(true);
-    }).catch(() => {
-      setRequested(true);
+      setRequesting(false);
+      refreshPending();
+      // Open WhatsApp after insert completes
+      if (waLink) window.open(waLink, "_blank");
     });
     // Don't prevent default — let the <a> navigate to WhatsApp
   };
@@ -315,6 +332,7 @@ export default function ListingCard({
       setShowUnrequest(false);
       setUnrequestReason("");
       setUnrequestOther("");
+      refreshPending();
     } catch {
       // silently handle
     }
@@ -451,18 +469,16 @@ export default function ListingCard({
               <div className="flex gap-2 mt-4 flex-wrap items-center">
                 {!isMine && !expired && !listing.sold && (
                   requested ? (
-                    <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Requested</button>
+                    <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
                   ) : (
-                    <a
-                      href={waLink || undefined}
-                      target={waLink ? "_blank" : undefined}
-                      rel={waLink ? "noopener noreferrer" : undefined}
-                      onClick={handleRequest}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
+                      disabled={requesting}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#25D366] text-white border-none rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
                       {requesting ? "Sending..." : "Request to Buy"}
-                    </a>
+                    </button>
                   )
                 )}
                 {markSoldButton}
@@ -521,18 +537,16 @@ export default function ListingCard({
             )}
             {!isMine && !expired && !listing.sold && (
               requested ? (
-                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Requested</button>
+                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
               ) : (
-                <a
-                  href={waLink || undefined}
-                  target={waLink ? "_blank" : undefined}
-                  rel={waLink ? "noopener noreferrer" : undefined}
-                  onClick={handleRequest}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
+                  disabled={requesting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-semibold bg-[#25D366] text-white border-none rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-3.5 h-3.5" />
                   {requesting ? "..." : "Request"}
-                </a>
+                </button>
               )
             )}
             {markSoldButton}
@@ -602,18 +616,16 @@ export default function ListingCard({
           <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
             {!isMine && !expired && !listing.sold && (
               requested ? (
-                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Requested</button>
+                <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
               ) : (
-                <a
-                  href={waLink || undefined}
-                  target={waLink ? "_blank" : undefined}
-                  rel={waLink ? "noopener noreferrer" : undefined}
-                  onClick={handleRequest}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white no-underline rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer"
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRequest(e); }}
+                  disabled={requesting}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white border-none rounded-lg hover:bg-[#1fb855] transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="" className="w-4 h-4" />
                   {requesting ? "Sending..." : "Request to Buy"}
-                </a>
+                </button>
               )
             )}
             {markSoldButton}

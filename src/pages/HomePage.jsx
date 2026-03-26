@@ -107,18 +107,20 @@ export default function HomePage() {
     // Fetch all active listings with images and seller info
     const { data: listings } = await supabase
       .from("listings")
-      .select("id, name, price, category, quantity, note, sold, marketplace_id, seller_id, created_at, listing_images(image_url, display_order), profiles(full_name, whatsapp)")
+      .select("id, name, price, category, quantity, note, sold, marketplace_id, seller_id, created_at, listing_images(image_url, display_order)")
       .eq("sold", false)
       .order("created_at", { ascending: false });
     setAllListings(listings || []);
 
-    // Fetch creator profiles
-    if (data?.length) {
-      const ids = [...new Set(data.map((m) => m.creator_id))];
+    // Fetch creator + seller profiles
+    const creatorIds = (data || []).map((m) => m.creator_id);
+    const sellerIds = (listings || []).map((l) => l.seller_id);
+    const allProfileIds = [...new Set([...creatorIds, ...sellerIds])];
+    if (allProfileIds.length) {
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name")
-        .in("id", ids);
+        .in("id", allProfileIds);
       if (profiles) {
         const map = {};
         profiles.forEach((p) => (map[p.id] = p.full_name));
@@ -138,7 +140,7 @@ export default function HomePage() {
 
   const isExpired = (m) => m.expiry_date && new Date(m.expiry_date) < new Date();
   const myCreated = marketplaces.filter((m) => m.creator_id === profile?.id);
-  const active = visible.filter((m) => !isExpired(m));
+  const active = visible.filter((m) => !isExpired(m)).sort((a, b) => (b.listing_count || 0) - (a.listing_count || 0));
 
   // Filtered search results with filters + sorting
   const filtered = useMemo(() => {
@@ -170,6 +172,8 @@ export default function HomePage() {
     }
     if (filters.sort === "popular") {
       list = [...list].sort((a, b) => (b.listing_count ?? 0) - (a.listing_count ?? 0));
+    } else if (filters.sort === "oldest") {
+      list = [...list].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     } else {
       list = [...list].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
@@ -196,7 +200,9 @@ export default function HomePage() {
       return true;
     });
     if (filters.sort === "popular") {
-      matching = [...matching].sort((a, b) => Number(b.price) - Number(a.price));
+      matching = [...matching].sort((a, b) => ((marketplaceMap[b.marketplace_id]?.listing_count || 0) - (marketplaceMap[a.marketplace_id]?.listing_count || 0)));
+    } else if (filters.sort === "oldest") {
+      matching = [...matching].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     } else {
       matching = [...matching].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     }
@@ -418,6 +424,7 @@ export default function HomePage() {
                 className="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 outline-none"
               >
                 <option value="recent">Most Recent</option>
+                <option value="oldest">Oldest</option>
                 <option value="popular">Most Popular</option>
               </select>
               {activeFilterCount > 0 && (
@@ -432,8 +439,8 @@ export default function HomePage() {
           )}
         </div>
 
-        {/* Collapsible marketplace results — right below search bar */}
-        {isSearching && filtered?.length > 0 && filteredItems.length > 0 && (
+        {/* Collapsible marketplace results — when user typed text */}
+        {isSearching && search.trim() && filtered?.length > 0 && (
           <div onClick={() => setShowSuggestions(false)}>
             <button
               onClick={() => setShowMarketplaceResults((v) => !v)}
@@ -464,8 +471,8 @@ export default function HomePage() {
               </p>
             ) : (
               <>
-                {/* Marketplace results shown expanded when no items match */}
-                {filtered?.length > 0 && filteredItems.length === 0 && (
+                {/* Marketplace results shown expanded when filters only (no text) */}
+                {filtered?.length > 0 && !search.trim() && (
                   <>
                     <p className="text-sm text-gray-400 mb-3">
                       {filtered.length} marketplace{filtered.length !== 1 ? "s" : ""} found
@@ -490,7 +497,7 @@ export default function HomePage() {
                         const catIcon = CATEGORIES.find((c) => c.name === item.category)?.icon;
                         const imgs = (item.listing_images || []).sort((a, b) => a.display_order - b.display_order);
                         const firstImage = imgs[0]?.image_url;
-                        const sellerName = item.profiles?.full_name || "Unknown";
+                        const sellerName = creators[item.seller_id] || "Unknown";
                         return (
                           <div
                             key={item.id}
@@ -626,26 +633,6 @@ export default function HomePage() {
                 </div>
               )}
             </div>
-
-            {/* My Created */}
-            {myCreated.length > 0 && (
-              <div>
-                <h2 className="text-lg font-bold mb-5">My Marketplaces</h2>
-                <div className="grid gap-4">
-                  {myCreated.slice(0, 3).map((m) => (
-                    <MarketplaceCard key={m.id} marketplace={m} />
-                  ))}
-                </div>
-                {myCreated.length > 3 && (
-                  <button
-                    onClick={() => navigate("/marketplace/mine")}
-                    className="mt-4 w-full py-2.5 text-sm text-[#002B5C] font-semibold bg-transparent border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                  >
-                    See More
-                  </button>
-                )}
-              </div>
-            )}
 
             {/* All Active */}
             <div>

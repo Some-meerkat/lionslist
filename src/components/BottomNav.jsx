@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Home, Search, PlusCircle, Clock, User } from "lucide-react";
+import { useAuth } from "../hooks/useAuth";
 import SellSheet from "./SellSheet";
 
 const tabs = [
@@ -14,6 +15,7 @@ const tabs = [
 export default function BottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { pendingCount } = useAuth();
   const [sellOpen, setSellOpen] = useState(false);
 
   const isActive = (path) => {
@@ -54,15 +56,23 @@ export default function BottomNav() {
             );
           }
 
+          const showBadge = tab.path === "/pending" && pendingCount > 0;
           return (
             <button
               key={tab.path}
               onClick={() => handleClick(tab)}
-              className={`flex flex-col items-center gap-0.5 pt-1.5 bg-transparent border-none cursor-pointer min-w-[56px] ${
+              className={`relative flex flex-col items-center gap-0.5 pt-1.5 bg-transparent border-none cursor-pointer min-w-[56px] ${
                 active ? "text-[#002B5C]" : "text-gray-400"
               }`}
             >
-              <Icon size={22} strokeWidth={active ? 2.5 : 1.75} />
+              <div className="relative">
+                <Icon size={22} strokeWidth={active ? 2.5 : 1.75} />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {pendingCount > 10 ? "10+" : pendingCount}
+                  </span>
+                )}
+              </div>
               <span className={`text-[10px] ${active ? "font-semibold" : "font-medium"}`}>
                 {tab.label}
               </span>

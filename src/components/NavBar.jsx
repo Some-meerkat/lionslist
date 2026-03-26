@@ -6,7 +6,7 @@ import Button from "./ui/Button";
 import MobileMenu from "./MobileMenu";
 
 export default function NavBar() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, pendingCount } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -37,18 +37,28 @@ export default function NavBar() {
             {profile?.full_name} · {profile?.school ? abbr(profile.school) : ""}
           </span>
           <button
-            className="text-white text-xl bg-transparent border-none cursor-pointer ml-1 hover:opacity-80 transition-opacity"
+            className="relative text-white text-xl bg-transparent border-none cursor-pointer ml-1 hover:opacity-80 transition-opacity"
             onClick={() => setMenuOpen(true)}
           >
             ☰
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {pendingCount > 10 ? "10+" : pendingCount}
+              </span>
+            )}
           </button>
         </div>
         {/* Mobile hamburger */}
         <button
-          className="md:hidden text-white text-2xl bg-transparent border-none cursor-pointer"
+          className="relative md:hidden text-white text-2xl bg-transparent border-none cursor-pointer"
           onClick={() => setMenuOpen(true)}
         >
           ☰
+          {pendingCount > 0 && (
+            <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {pendingCount > 10 ? "10+" : pendingCount}
+            </span>
+          )}
         </button>
       </div>
       {menuOpen && (

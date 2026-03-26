@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { CATEGORIES } from "../constants/categories";
 import { whatsappLink } from "../utils/helpers";
+import { useCallback } from "react";
 import Card from "../components/ui/Card";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 
 export default function PendingPage() {
-  const { profile } = useAuth();
+  const { profile, refreshPending } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState("buying");
   const [buyRequests, setBuyRequests] = useState([]);
@@ -92,11 +93,19 @@ export default function PendingPage() {
   const updateStatus = async (requestId, status) => {
     await supabase.from("buy_requests").update({ status }).eq("id", requestId);
     fetchRequests();
+    refreshPending();
   };
 
   const cancelRequest = async (requestId) => {
     await supabase.from("buy_requests").delete().eq("id", requestId);
     fetchRequests();
+    refreshPending();
+  };
+
+  const markListingSold = async (listingId) => {
+    await supabase.from("listings").update({ sold: true }).eq("id", listingId);
+    fetchRequests();
+    refreshPending();
   };
 
   const pendingBuy = buyRequests.filter((r) => r.status === "pending");
@@ -187,6 +196,7 @@ export default function PendingPage() {
                             key={r.id}
                             request={r}
                             type="buying"
+                            onRemind
                             onNavigate={navigate}
                           />
                         ))}
@@ -240,6 +250,7 @@ export default function PendingPage() {
                             type="selling"
                             onAccept={() => updateStatus(r.id, "accepted")}
                             onDecline={() => updateStatus(r.id, "declined")}
+                            onMarkSold={() => markListingSold(r.listing_id)}
                             onNavigate={navigate}
                           />
                         ))}
@@ -257,6 +268,7 @@ export default function PendingPage() {
                             key={r.id}
                             request={r}
                             type="selling"
+                            onMarkSold={() => markListingSold(r.listing_id)}
                             onNavigate={navigate}
                           />
                         ))}
@@ -273,7 +285,7 @@ export default function PendingPage() {
   );
 }
 
-function RequestCard({ request, type, onAccept, onDecline, onCancel, onNavigate }) {
+function RequestCard({ request, type, onAccept, onDecline, onCancel, onMarkSold, onRemind, onNavigate }) {
   const listing = request.listings;
   const marketplace = listing?.marketplaces;
   const cat = CATEGORIES.find((c) => c.name === listing?.category);
@@ -287,6 +299,17 @@ function RequestCard({ request, type, onAccept, onDecline, onCancel, onNavigate 
 
   const waLink = person?.whatsapp && listing
     ? whatsappLink(person.whatsapp, listing.name, marketplace?.name || "")
+    : null;
+
+  const remindLink = person?.whatsapp && listing
+    ? (() => {
+        const clean = (person.whatsapp || "").replace(/[^0-9+]/g, "");
+        if (!clean) return null;
+        const text = encodeURIComponent(
+          `Hi! Just a friendly reminder to mark "${listing.name}" as sold on LionsList (${marketplace?.name || ""}) if the transaction is complete. Thanks!`
+        );
+        return `https://api.whatsapp.com/send?phone=${clean}&text=${text}`;
+      })()
     : null;
 
   return (
@@ -328,23 +351,40 @@ function RequestCard({ request, type, onAccept, onDecline, onCancel, onNavigate 
         </span>
         <div className="flex gap-1.5">
           {/* Buying: show WhatsApp if accepted, cancel if pending/declined */}
-          {type === "buying" && request.status === "accepted" && waLink && (
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
-            >
-              Message Seller
-            </a>
+          {type === "buying" && request.status === "accepted" && (
+            <>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
+                >
+                  Message Seller
+                </a>
+              )}
+              {onRemind && !listing?.sold && (
+                <a
+                  href={remindLink || undefined}
+                  target={remindLink ? "_blank" : undefined}
+                  rel={remindLink ? "noopener noreferrer" : undefined}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg no-underline hover:bg-amber-100 transition-colors cursor-pointer"
+                >
+                  Remind to Mark Sold
+                </a>
+              )}
+            </>
           )}
           {type === "buying" && (request.status === "pending" || request.status === "declined") && onCancel && (
-            <Button small variant="secondary" onClick={onCancel}>
-              {request.status === "pending" ? "Cancel" : "Remove"}
-            </Button>
+            <button
+              onClick={onCancel}
+              className="inline-flex items-center px-3 py-1 text-xs font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-full cursor-pointer hover:bg-[#C5DBE9] transition-colors"
+            >
+              {request.status === "pending" ? "Cancel Request" : "Remove"}
+            </button>
           )}
 
-          {/* Selling: accept/decline if pending, WhatsApp for accepted */}
+          {/* Selling: accept/decline if pending, WhatsApp + mark sold for accepted */}
           {type === "selling" && request.status === "pending" && (
             <>
               <Button small variant="success" onClick={onAccept}>
@@ -355,15 +395,27 @@ function RequestCard({ request, type, onAccept, onDecline, onCancel, onNavigate 
               </Button>
             </>
           )}
-          {type === "selling" && request.status === "accepted" && waLink && (
-            <a
-              href={waLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
-            >
-              Message Buyer
-            </a>
+          {type === "selling" && request.status === "accepted" && (
+            <>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold bg-[#25D366] text-white rounded-lg no-underline hover:bg-[#1fb855] transition-colors"
+                >
+                  Message Buyer
+                </a>
+              )}
+              {onMarkSold && !listing?.sold && (
+                <button
+                  onClick={onMarkSold}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-[13px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg cursor-pointer hover:bg-emerald-100 transition-colors"
+                >
+                  <CheckCircle size={14} /> Mark as Sold
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
