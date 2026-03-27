@@ -305,6 +305,7 @@ export default function MarketplaceDetailPage() {
       <Card className="mb-6">
         <div className="flex justify-between items-start flex-wrap gap-3">
           <div className="flex-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold m-0 mb-1">Marketplace</p>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="m-0 text-2xl text-[#002B5C] font-bold">
                 {marketplace.name}
@@ -340,52 +341,47 @@ export default function MarketplaceDetailPage() {
               </div>
             )}
           </div>
-          <div className="flex gap-2 flex-wrap items-center">
-            {!expired && (
-              <Button
-                small
-                onClick={() => {
-                  setShowCreate(true);
-                  setTab("sell");
-                }}
-              >
-                + New Listing
-              </Button>
-            )}
-            <div className="relative" ref={mktMenuRef}>
-              <button
-                onClick={() => setShowMktMenu((v) => !v)}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 border-none cursor-pointer transition-colors"
-              >
-                <span className="text-gray-500 text-lg leading-none">⋮</span>
-              </button>
-              {showMktMenu && (
-                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[200px]">
+          <div className="relative" ref={mktMenuRef}>
+            <button
+              onClick={() => setShowMktMenu((v) => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 border-none cursor-pointer transition-colors"
+            >
+              <span className="text-gray-500 text-lg leading-none">⋮</span>
+            </button>
+            {showMktMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[200px]">
+                {!expired && (
                   <button
-                    onClick={() => { setShowMktMenu(false); copyLink(); }}
+                    onClick={() => { setShowMktMenu(false); setShowCreate(true); setTab("sell"); }}
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
                   >
-                    {copied ? "✓ Copied!" : "🔗 Copy Marketplace Link"}
+                    ➕ New Listing
                   </button>
-                  {isCreator && (
-                    <>
-                      <button
-                        onClick={() => { setShowMktMenu(false); startEdit(); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
-                      >
-                        ✏️ Edit Marketplace
-                      </button>
-                      <button
-                        onClick={() => { setShowMktMenu(false); deleteMarketplace(); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
-                      >
-                        🗑️ Delete Marketplace
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+                <button
+                  onClick={() => { setShowMktMenu(false); copyLink(); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+                >
+                  {copied ? "✓ Copied!" : "🔗 Copy Marketplace Link"}
+                </button>
+                {isCreator && (
+                  <>
+                    <button
+                      onClick={() => { setShowMktMenu(false); startEdit(); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+                    >
+                      ✏️ Edit Marketplace
+                    </button>
+                    <button
+                      onClick={() => { setShowMktMenu(false); deleteMarketplace(); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
+                    >
+                      🗑️ Delete Marketplace
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </Card>
