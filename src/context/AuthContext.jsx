@@ -23,14 +23,19 @@ export function AuthProvider({ children }) {
     return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
+  const currentUserId = session?.user?.id;
+
   useEffect(() => {
-    if (session?.user) {
-      fetchProfile(session.user.id);
+    if (currentUserId) {
+      // Only fetch if profile isn't already loaded for this user
+      if (!profile || profile.id !== currentUserId) {
+        fetchProfile(currentUserId);
+      }
     } else if (session === null) {
       setProfile(null);
       setPendingCount(0);
     }
-  }, [session]);
+  }, [currentUserId]);
 
   async function fetchProfile(userId) {
     try {
@@ -40,7 +45,6 @@ export function AuthProvider({ children }) {
         .eq("id", userId)
         .single();
       if (error && error.code !== "PGRST116") {
-        // Network or other error — set profile to null so app doesn't hang on loading
         console.error("Profile fetch error:", error);
       }
       setProfile(data || null);
