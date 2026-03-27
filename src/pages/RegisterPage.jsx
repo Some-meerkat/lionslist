@@ -76,7 +76,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#002B5C] to-[#9BCBEB] flex items-center justify-center p-4">
       <Card className="max-w-[440px] w-full">
         <div className="text-center mb-6">
-          <div className="text-[32px] mb-2">🦁</div>
+          <img src="/favicon-192.png" alt="" className="w-16 h-16 mx-auto mb-2" />
           <h1 className="text-[28px] font-bold text-[#002B5C] m-0">
             LionsList
           </h1>

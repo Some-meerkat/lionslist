@@ -26,7 +26,7 @@ export default function NavBar() {
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
         >
-          🦁 LionsList
+          <img src="/favicon-32.png" alt="" className="w-7 h-7 inline-block align-middle -mt-0.5" /> LionsList
         </div>
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-3">
