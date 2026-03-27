@@ -529,7 +529,7 @@ export default function MarketplaceDetailPage() {
               marketplace={marketplace}
               onSave={() => {
                 setShowCreate(false);
-                setTab("buy");
+                setTab("sell");
                 fetchData();
               }}
               onCancel={() => setShowCreate(false)}
