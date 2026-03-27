@@ -27,7 +27,7 @@ export default function VerifyPage() {
       });
       if (verifyError) throw verifyError;
 
-      // Create profile from stored form data
+      // Create profile from stored form data (registration flow)
       const pending = JSON.parse(sessionStorage.getItem("pendingProfile") || "{}");
       if (pending.name && data.user) {
         const { error: profileError } = await supabase.from("profiles").upsert({
@@ -42,7 +42,21 @@ export default function VerifyPage() {
         sessionStorage.removeItem("pendingProfile");
       }
 
-      navigate("/home");
+      // Check if profile exists before navigating
+      if (data.user) {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", data.user.id)
+          .single();
+        if (existingProfile) {
+          navigate("/home");
+        } else {
+          navigate("/complete-profile");
+        }
+      } else {
+        navigate("/home");
+      }
     } catch (err) {
       setError(err.message || "Invalid verification code");
     } finally {
