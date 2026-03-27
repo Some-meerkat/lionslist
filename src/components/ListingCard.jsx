@@ -87,7 +87,7 @@ export default function ListingCard({
       </button>
       {showMenu && (
         <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[160px]">
-          {!listing.sold && (
+          {!listing.sold && !listing.sale_pending && (
             <>
               <button
                 onClick={() => { setShowMenu(false); setActiveImg(0); setExpanded(true); startEditing(); }}
@@ -102,6 +102,14 @@ export default function ListingCard({
                 <Trash2 size={14} /> Delete
               </button>
             </>
+          )}
+          {listing.sale_pending && !listing.sold && onReactivate && (
+            <button
+              onClick={() => { setShowMenu(false); setShowReactivateConfirm(true); }}
+              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 bg-transparent border-none cursor-pointer hover:bg-emerald-50 transition-colors text-left"
+            >
+              <RotateCcw size={14} /> Reactivate
+            </button>
           )}
           {listing.sold && onReactivate && (
             <button
