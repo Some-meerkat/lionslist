@@ -32,6 +32,8 @@ export default function ListingCard({
   const [requesting, setRequesting] = useState(false);
   const [showRemind, setShowRemind] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showRequestMenu, setShowRequestMenu] = useState(false);
+  const requestMenuRef = useRef(null);
 
   // Check if user already requested this listing
   useEffect(() => {
@@ -65,6 +67,13 @@ export default function ListingCard({
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
   }, [showMenu]);
+
+  useEffect(() => {
+    if (!showRequestMenu) return;
+    const close = (e) => { if (requestMenuRef.current && !requestMenuRef.current.contains(e.target)) setShowRequestMenu(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showRequestMenu]);
 
   const [showReactivateConfirm, setShowReactivateConfirm] = useState(false);
 
@@ -143,6 +152,33 @@ export default function ListingCard({
 
   const [showSoldConfirm, setShowSoldConfirm] = useState(false);
   const [soldPrice, setSoldPrice] = useState("");
+
+  const requestedMenu = requested && !isMine && !listing.sold && !listing.sale_pending && (
+    <div className="relative" ref={requestMenuRef} onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => setShowRequestMenu((v) => !v)}
+        className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 border-none cursor-pointer transition-colors"
+      >
+        <span className="text-gray-500 text-lg leading-none">⋮</span>
+      </button>
+      {showRequestMenu && (
+        <div className="absolute right-0 bottom-full mb-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[180px]">
+          <button
+            onClick={() => { setShowRequestMenu(false); setShowRemind(true); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+          >
+            Report as Sold
+          </button>
+          <button
+            onClick={() => { setShowRequestMenu(false); setShowUnrequest(true); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
+          >
+            Cancel Request
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
   const markSoldButton = isMine && !listing.sold && !expired && onMarkSold && (
     <button
@@ -528,10 +564,7 @@ export default function ListingCard({
                 )}
                 {!isMine && !expired && !listing.sold && !listing.sale_pending && (
                   requested ? (
-                    <>
-                      <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
-                      <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3.5 py-1.5 text-[13px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
-                    </>
+                    requestedMenu
                   ) : (
                     <button
                       onClick={(e) => { e.stopPropagation(); handleRequest(); }}
@@ -604,10 +637,7 @@ export default function ListingCard({
             )}
             {!isMine && !expired && !listing.sold && !listing.sale_pending && (
               requested ? (
-                <>
-                  <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
-                  <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-2.5 py-1 text-[11px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel</button>
-                </>
+                requestedMenu
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRequest(); }}
@@ -691,10 +721,7 @@ export default function ListingCard({
             )}
             {!isMine && !expired && !listing.sold && !listing.sale_pending && (
               requested ? (
-                <>
-                  <button onClick={(e) => { e.stopPropagation(); setShowRemind(true); }} className="inline-flex items-center px-3 py-1.5 text-[12px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">Report as Sold</button>
-                  <button onClick={(e) => { e.stopPropagation(); setShowUnrequest(true); }} className="inline-flex items-center px-3 py-1.5 text-[12px] font-semibold bg-[#DCE9F5] text-[#002B5C] border border-[#9BCBEB] rounded-lg cursor-pointer hover:bg-[#C5DBE9] transition-colors">Cancel Request</button>
-                </>
+                requestedMenu
               ) : (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleRequest(); }}
