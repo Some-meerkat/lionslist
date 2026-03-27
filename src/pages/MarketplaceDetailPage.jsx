@@ -27,6 +27,7 @@ export default function MarketplaceDetailPage() {
   const [sellers, setSellers] = useState({});
   const [tab, setTab] = useState("buy");
   const [showCreate, setShowCreate] = useState(false);
+  const [newListingId, setNewListingId] = useState(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -527,9 +528,10 @@ export default function MarketplaceDetailPage() {
           {!expired && showCreate && (
             <CreateListingForm
               marketplace={marketplace}
-              onSave={() => {
+              onSave={(listingId) => {
                 setShowCreate(false);
                 setTab("sell");
+                setNewListingId(listingId);
                 fetchData();
               }}
               onCancel={() => setShowCreate(false)}
@@ -563,6 +565,7 @@ export default function MarketplaceDetailPage() {
                   onMarkSold={markSold}
                   expired={expired}
                   onUpdate={fetchData}
+                  autoExpand={l.id === newListingId}
                 />
               ))}
             </div>

@@ -17,13 +17,14 @@ export default function ListingCard({
   onReactivate,
   onUpdate,
   expired,
+  autoExpand,
 }) {
   const { profile, refreshPending } = useAuth();
   const isMine = listing.seller_id === profile?.id;
   const cat = CATEGORIES.find((c) => c.name === listing.category);
   const images = (listing.listing_images || []).sort((a, b) => a.display_order - b.display_order);
   const firstImage = images.length > 0 ? images[0].image_url : null;
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!!autoExpand);
   const [activeImg, setActiveImg] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef(null);
