@@ -103,13 +103,23 @@ export default function ListingCard({
               </button>
             </>
           )}
-          {listing.sale_pending && !listing.sold && onReactivate && (
-            <button
-              onClick={() => { setShowMenu(false); setShowReactivateConfirm(true); }}
-              className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 bg-transparent border-none cursor-pointer hover:bg-emerald-50 transition-colors text-left"
-            >
-              <RotateCcw size={14} /> Reactivate
-            </button>
+          {listing.sale_pending && !listing.sold && (
+            <>
+              {onReactivate && (
+                <button
+                  onClick={() => { setShowMenu(false); setShowReactivateConfirm(true); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-emerald-700 bg-transparent border-none cursor-pointer hover:bg-emerald-50 transition-colors text-left"
+                >
+                  <RotateCcw size={14} /> Reactivate
+                </button>
+              )}
+              <button
+                onClick={() => { setShowMenu(false); deleteListing(); }}
+                className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
+              >
+                <Trash2 size={14} /> Delete Listing
+              </button>
+            </>
           )}
           {listing.sold && onReactivate && (
             <button
