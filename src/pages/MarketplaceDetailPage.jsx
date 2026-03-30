@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
@@ -27,6 +27,9 @@ export default function MarketplaceDetailPage() {
   const [sellers, setSellers] = useState({});
   const [tab, setTab] = useState("buy");
   const [showCreate, setShowCreate] = useState(false);
+  const [newListingId, setNewListingId] = useState(null);
+  const [showMktMenu, setShowMktMenu] = useState(false);
+  const mktMenuRef = useRef(null);
   const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -43,6 +46,13 @@ export default function MarketplaceDetailPage() {
   useEffect(() => {
     fetchData();
   }, [code]);
+
+  useEffect(() => {
+    if (!showMktMenu) return;
+    const close = (e) => { if (mktMenuRef.current && !mktMenuRef.current.contains(e.target)) setShowMktMenu(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showMktMenu]);
 
   async function fetchData() {
     setLoading(true);
@@ -132,13 +142,13 @@ export default function MarketplaceDetailPage() {
     return results;
   }, [itemSearch, othersActive]);
 
-  const copyCode = async () => {
-    const code = marketplace?.code || id;
+  const copyLink = async () => {
+    const link = `${window.location.origin}/marketplace/${marketplace?.code || marketplace?.id}`;
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(link);
     } catch {
       const el = document.createElement("textarea");
-      el.value = code;
+      el.value = link;
       document.body.appendChild(el);
       el.select();
       document.execCommand("copy");
@@ -295,6 +305,7 @@ export default function MarketplaceDetailPage() {
       <Card className="mb-6">
         <div className="flex justify-between items-start flex-wrap gap-3">
           <div className="flex-1">
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold m-0 mb-1">Marketplace</p>
             <div className="flex items-center gap-3 flex-wrap">
               <h1 className="m-0 text-2xl text-[#002B5C] font-bold">
                 {marketplace.name}
@@ -330,30 +341,46 @@ export default function MarketplaceDetailPage() {
               </div>
             )}
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <Button small variant="secondary" onClick={copyCode}>
-              {copied ? "Copied!" : "📋 Copy ID"}
-            </Button>
-            {isCreator && (
-              <>
-                <Button small variant="secondary" onClick={startEdit}>
-                  ✏️ Edit
-                </Button>
-                <Button small variant="danger" onClick={deleteMarketplace}>
-                  🗑️ Delete
-                </Button>
-              </>
-            )}
-            {!expired && (
-              <Button
-                small
-                onClick={() => {
-                  setShowCreate(true);
-                  setTab("sell");
-                }}
-              >
-                + New Listing
-              </Button>
+          <div className="relative" ref={mktMenuRef}>
+            <button
+              onClick={() => setShowMktMenu((v) => !v)}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200 border-none cursor-pointer transition-colors"
+            >
+              <span className="text-gray-500 text-lg leading-none">⋮</span>
+            </button>
+            {showMktMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[200px]">
+                {!expired && (
+                  <button
+                    onClick={() => { setShowMktMenu(false); setShowCreate(true); setTab("sell"); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+                  >
+                    ➕ New Listing
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowMktMenu(false); copyLink(); }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+                >
+                  {copied ? "✓ Copied!" : "🔗 Copy Marketplace Link"}
+                </button>
+                {isCreator && (
+                  <>
+                    <button
+                      onClick={() => { setShowMktMenu(false); startEdit(); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 bg-transparent border-none cursor-pointer hover:bg-gray-50 transition-colors text-left"
+                    >
+                      ✏️ Edit Marketplace
+                    </button>
+                    <button
+                      onClick={() => { setShowMktMenu(false); deleteMarketplace(); }}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 bg-transparent border-none cursor-pointer hover:bg-red-50 transition-colors text-left"
+                    >
+                      🗑️ Delete Marketplace
+                    </button>
+                  </>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -527,9 +554,10 @@ export default function MarketplaceDetailPage() {
           {!expired && showCreate && (
             <CreateListingForm
               marketplace={marketplace}
-              onSave={() => {
+              onSave={(listingId) => {
                 setShowCreate(false);
-                setTab("buy");
+                setTab("sell");
+                setNewListingId(listingId);
                 fetchData();
               }}
               onCancel={() => setShowCreate(false)}
@@ -563,6 +591,7 @@ export default function MarketplaceDetailPage() {
                   onMarkSold={markSold}
                   expired={expired}
                   onUpdate={fetchData}
+                  autoExpand={l.id === newListingId}
                 />
               ))}
             </div>

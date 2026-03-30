@@ -47,9 +47,13 @@ export default function CompleteProfilePage() {
         graduation_year: Number(form.gradYear),
         whatsapp: form.countryCode + form.whatsapp.replace(/\D/g, ""),
       });
-      if (error) throw error;
+      if (error) {
+        console.error("Profile upsert error:", error);
+        throw error;
+      }
       await refreshProfile();
-      navigate("/home");
+      // Small delay to ensure profile is loaded before navigating
+      setTimeout(() => navigate("/home"), 200);
     } catch (err) {
       setErrors({ name: err.message || "Failed to create profile" });
     } finally {
@@ -61,7 +65,7 @@ export default function CompleteProfilePage() {
     <div className="min-h-screen bg-gradient-to-br from-[#002B5C] to-[#9BCBEB] flex items-center justify-center p-4">
       <Card className="max-w-[440px] w-full">
         <div className="text-center mb-6">
-          <div className="text-[32px] mb-2">🦁</div>
+          <img src="/favicon-192.png" alt="" className="w-16 h-16 mx-auto mb-2" />
           <h1 className="text-[28px] font-bold text-[#002B5C] m-0">
             Complete Your Profile
           </h1>

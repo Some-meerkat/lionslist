@@ -27,7 +27,7 @@ export default function VerifyPage() {
       });
       if (verifyError) throw verifyError;
 
-      // Create profile from stored form data
+      // Create profile from stored form data (registration flow)
       const pending = JSON.parse(sessionStorage.getItem("pendingProfile") || "{}");
       if (pending.name && data.user) {
         const { error: profileError } = await supabase.from("profiles").upsert({

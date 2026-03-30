@@ -92,7 +92,7 @@ export default function CreateListingForm({ marketplace, onSave, onCancel }) {
         }
       }
 
-      onSave();
+      onSave(listing.id);
     } catch (err) {
       console.error("Failed to create listing:", err);
       alert("Failed to create listing: " + (err.message || "Please try again."));
