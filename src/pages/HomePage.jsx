@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
+import { Search, SlidersHorizontal, X, ChevronDown, TrendingUp } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { CATEGORIES } from "../constants/categories";
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [homeToast, setHomeToast] = useState(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelOther, setCancelOther] = useState("");
+  const [trendingItems, setTrendingItems] = useState([]);
 
   useEffect(() => {
     fetchMarketplaces();
@@ -132,6 +133,23 @@ export default function HomePage() {
       .eq("sold", false)
       .order("created_at", { ascending: false });
     setAllListings(listings || []);
+
+    // Fetch trending items (listings with the most buy requests)
+    const { data: requestCounts } = await supabase
+      .from("buy_requests")
+      .select("listing_id");
+    if (requestCounts?.length && listings?.length) {
+      const countMap = {};
+      requestCounts.forEach((r) => {
+        countMap[r.listing_id] = (countMap[r.listing_id] || 0) + 1;
+      });
+      const trending = listings
+        .filter((l) => countMap[l.id])
+        .map((l) => ({ ...l, requestCount: countMap[l.id] }))
+        .sort((a, b) => b.requestCount - a.requestCount)
+        .slice(0, 6);
+      setTrendingItems(trending);
+    }
 
     // Fetch creator + seller profiles
     const creatorIds = (data || []).map((m) => m.creator_id);
@@ -581,6 +599,63 @@ export default function HomePage() {
 
         {!isSearching && (
           <>
+            {/* Trending Items */}
+            {trendingItems.length > 0 && (
+              <div>
+                <h2 className="text-lg font-bold mb-5 flex items-center gap-2">
+                  <TrendingUp size={20} className="text-[#002B5C]" /> Trending Items
+                </h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {trendingItems.map((item) => {
+                    const m = marketplaceMap[item.marketplace_id];
+                    const catIcon = CATEGORIES.find((c) => c.name === item.category)?.icon;
+                    const imgs = (item.listing_images || []).sort((a, b) => a.display_order - b.display_order);
+                    const firstImage = imgs[0]?.image_url;
+                    const sellerName = creators[item.seller_id] || "Unknown";
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-white rounded-xl overflow-hidden border border-gray-200 transition-all hover:shadow-md cursor-pointer"
+                        onClick={() => navigate(`/marketplace/${m?.code || m?.id}`)}
+                      >
+                        {firstImage ? (
+                          <img src={firstImage} alt={item.name} className="w-full h-[160px] object-cover bg-gray-100" />
+                        ) : (
+                          <div className="w-full h-[160px] flex items-center justify-center text-4xl text-gray-300 bg-gray-100">
+                            {catIcon || "\uD83D\uDCE6"}
+                          </div>
+                        )}
+                        <div className="p-3">
+                          <div className="flex justify-between items-start">
+                            <h3 className="m-0 text-sm font-semibold truncate">{item.name}</h3>
+                            <span className="font-bold text-green-600 text-sm shrink-0 ml-2">
+                              {Number(item.price) === 0 ? "FREE" : `$${Number(item.price).toFixed(0)}`}
+                            </span>
+                          </div>
+                          <div className="flex gap-1.5 mt-1.5 text-xs text-gray-400 flex-wrap">
+                            <span>{catIcon} {item.category}</span>
+                            <span>·</span>
+                            <span className="text-amber-600 font-semibold">{item.requestCount} request{item.requestCount !== 1 ? "s" : ""}</span>
+                          </div>
+                          {item.note && (
+                            <p className="text-gray-500 text-xs mt-1.5 leading-relaxed m-0 line-clamp-2">{item.note}</p>
+                          )}
+                          <div className="mt-2.5 pt-2.5 border-t border-gray-100 flex justify-between items-center">
+                            <span className="text-xs text-gray-500">
+                              by <strong>{sellerName}</strong>
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              in {m?.name}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Categories */}
             <div>
               <h2 className="text-lg font-bold mb-5">Browse by Category</h2>

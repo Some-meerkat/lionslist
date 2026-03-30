@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
@@ -9,6 +9,8 @@ import Select from "../components/ui/Select";
 import Button from "../components/ui/Button";
 import Badge from "../components/ui/Badge";
 import { COUNTRY_CODES } from "../constants/countryCodes";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 function parsePhone(whatsapp) {
   const raw = (whatsapp || "").replace(/[^0-9+]/g, "");
@@ -30,6 +32,11 @@ export default function ProfilePage() {
   const [myMarketplaces, setMyMarketplaces] = useState([]);
   const [boughtItems, setBoughtItems] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfReady, setPdfReady] = useState(false);
+  const [pdfBlob, setPdfBlob] = useState(null);
+  const [pdfHtml, setPdfHtml] = useState("");
+  const pdfRef = useRef(null);
 
   useEffect(() => {
     if (profile) {
@@ -98,6 +105,100 @@ export default function ProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const generatePdf = async () => {
+    const activeListings = myListings.filter((l) => !l.sold);
+    if (activeListings.length === 0) {
+      alert("You don't have any active listings to include in the PDF.");
+      return;
+    }
+
+    setPdfLoading(true);
+    setPdfReady(false);
+    setPdfBlob(null);
+    setPdfHtml("");
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "generate-listing-pdf",
+        {
+          body: {
+            sellerName: profile.full_name,
+            school: profile.school,
+            graduationYear: profile.graduation_year,
+            listings: myListings.map((l) => ({
+              name: l.name,
+              price: l.price,
+              note: l.note,
+              category: l.category,
+              marketplace: l.marketplaces?.name,
+              sold: l.sold,
+            })),
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (!data.html) throw new Error("No HTML returned");
+
+      setPdfHtml(data.html);
+
+      // Wait for the hidden HTML to render, then convert to PDF
+      await new Promise((r) => setTimeout(r, 500));
+
+      const canvas = await html2canvas(pdfRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const blob = pdf.output("blob");
+      setPdfBlob(blob);
+      setPdfReady(true);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      alert("Failed to generate PDF. Please try again.");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const downloadPdf = () => {
+    if (!pdfBlob) return;
+    const url = URL.createObjectURL(pdfBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${profile.full_name.replace(/\s+/g, "_")}_LionsList.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const shareOnWhatsApp = () => {
+    const text = encodeURIComponent(
+      `Check out my listings on LionsList! - ${profile.full_name}, ${profile.school} Class of ${profile.graduation_year}`
+    );
+    window.open(`https://api.whatsapp.com/send?text=${text}`, "_blank");
   };
 
   if (!profile) return null;
@@ -242,6 +343,59 @@ export default function ProfilePage() {
           </div>
         )}
       </Card>
+
+      {/* Create PDF */}
+      <Card className="max-w-[600px] mx-auto mb-6">
+        <h3 className="m-0 mb-2 text-[#002B5C] font-semibold">
+          Share Your Listings
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Generate a beautifully designed PDF catalog of your listings to share on WhatsApp.
+        </p>
+        {!pdfReady ? (
+          <Button
+            onClick={generatePdf}
+            disabled={pdfLoading || myListings.length === 0}
+            full
+            className="!py-3 !text-base"
+          >
+            {pdfLoading ? "Generating PDF..." : "Create PDF"}
+          </Button>
+        ) : (
+          <div className="flex gap-3">
+            <Button onClick={downloadPdf} full className="!py-3 !text-base">
+              Download PDF
+            </Button>
+            <Button
+              variant="whatsapp"
+              onClick={shareOnWhatsApp}
+              full
+              className="!py-3 !text-base"
+            >
+              Share on WhatsApp
+            </Button>
+          </div>
+        )}
+        {myListings.length === 0 && (
+          <p className="text-xs text-gray-400 mt-2 text-center">
+            Create some listings first to generate a PDF.
+          </p>
+        )}
+      </Card>
+
+      {/* Hidden PDF render container */}
+      {pdfHtml && (
+        <div
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            top: 0,
+            width: "800px",
+          }}
+        >
+          <div ref={pdfRef} dangerouslySetInnerHTML={{ __html: pdfHtml }} />
+        </div>
+      )}
 
       {/* My Marketplaces */}
       <Card className="max-w-[600px] mx-auto">
