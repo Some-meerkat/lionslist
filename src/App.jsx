@@ -16,6 +16,7 @@ import FeedbackPage from "./pages/FeedbackPage";
 import CommunityPage from "./pages/CommunityPage";
 import MyListingsPage from "./pages/MyListingsPage";
 import AdminCategoriesPage from "./pages/AdminCategoriesPage";
+import LionHuntPage from "./pages/LionHuntPage";
 import ScrollToTop from "./components/ScrollToTop";
 
 function Layout({ children }) {
@@ -83,6 +84,16 @@ export default function App() {
               <ProtectedRoute>
                 <Layout>
                   <MarketplaceDetailPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/lion-hunt"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <LionHuntPage />
                 </Layout>
               </ProtectedRoute>
             }

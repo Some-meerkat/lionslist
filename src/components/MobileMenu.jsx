@@ -49,6 +49,12 @@ export default function MobileMenu({ profile, onClose, onLogout, onNavigate }) {
             Move Out Sale
           </button>
           <button
+            className="text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 font-medium text-gray-700 bg-transparent border-none cursor-pointer"
+            onClick={() => onNavigate("/lion-hunt")}
+          >
+            Lion Hunt
+          </button>
+          <button
             className="text-left px-4 py-2.5 rounded-lg hover:bg-gray-100 font-medium text-gray-700 bg-transparent border-none cursor-pointer flex items-center gap-2"
             onClick={() => onNavigate("/my-listings")}
           >

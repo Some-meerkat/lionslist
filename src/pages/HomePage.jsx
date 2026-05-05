@@ -346,6 +346,36 @@ export default function HomePage() {
           <CategoryGrid onCategoryClick={(cat) => navigate(`/category/${encodeURIComponent(cat)}`)} />
         </div>
 
+        {/* Lion Hunt CTA */}
+        <div
+          className="flex items-center justify-between p-5 cursor-pointer transition-all"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            borderLeft: "4px solid var(--columbia-navy)",
+          }}
+          onClick={() => navigate("/lion-hunt")}
+          onMouseEnter={(e) => { e.currentTarget.style.boxShadow = "var(--shadow)"; e.currentTarget.style.borderColor = "var(--border-strong)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.borderColor = "var(--border)"; }}
+        >
+          <div className="flex items-center gap-4">
+            <div
+              className="flex items-center justify-center shrink-0"
+              style={{ width: "48px", height: "48px", borderRadius: "var(--radius)", background: "var(--columbia-blue)", fontSize: "24px" }}
+            >
+              🦁
+            </div>
+            <div>
+              <h3 className="display-text text-base m-0" style={{ color: "var(--text)" }}>Lion Hunt</h3>
+              <p className="text-xs m-0 mt-0.5" style={{ color: "var(--text-muted)" }}>
+                Can't find what you need? Post a request and let sellers come to you.
+              </p>
+            </div>
+          </div>
+          <span className="text-sm font-semibold shrink-0" style={{ color: "var(--columbia-navy)" }}>Browse &rarr;</span>
+        </div>
+
         {/* Trending Items */}
         {trendingItems.length > 0 && (
           <div>
