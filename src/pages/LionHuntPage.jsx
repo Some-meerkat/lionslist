@@ -285,6 +285,11 @@ function CreateHuntForm({ profile, onDone, onCancel }) {
       return;
     }
 
+    if (!profile?.id) {
+      alert("Please wait — your profile is still loading. Try again in a moment.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const { error } = await supabase.from("lion_hunts").insert({

@@ -42,6 +42,11 @@ export default function SellItemPage() {
       return;
     }
 
+    if (!profile?.id) {
+      alert("Please wait — your profile is still loading. Try again in a moment.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const modResult = await moderateContent({

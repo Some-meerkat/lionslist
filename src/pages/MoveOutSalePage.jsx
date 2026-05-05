@@ -67,6 +67,11 @@ export default function MoveOutSalePage() {
   const submit = async (e) => {
     e.preventDefault();
 
+    if (!profile?.id) {
+      alert("Please wait — your profile is still loading. Try again in a moment.");
+      return;
+    }
+
     // Validate
     for (const item of items) {
       if (!item.name.trim()) {
