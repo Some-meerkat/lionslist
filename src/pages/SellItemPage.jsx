@@ -14,7 +14,8 @@ import ImageUpload from "../components/ImageUpload";
 
 export default function SellItemPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
+  const userId = profile?.id || session?.user?.id;
   const [form, setForm] = useState({
     name: "",
     category: CATEGORIES[0].name,
@@ -42,8 +43,8 @@ export default function SellItemPage() {
       return;
     }
 
-    if (!profile?.id) {
-      alert("Please wait — your profile is still loading. Try again in a moment.");
+    if (!userId) {
+      alert("Something went wrong. Please refresh and try again.");
       return;
     }
 
@@ -70,7 +71,7 @@ export default function SellItemPage() {
           price: Number(form.price) || 0,
           note: form.note || null,
           marketplace_id: null,
-          seller_id: profile.id,
+          seller_id: userId,
         })
         .select()
         .single();
@@ -81,7 +82,7 @@ export default function SellItemPage() {
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
         if (!img.file) continue;
-        const path = `${profile.id}/${listing.id}/${Date.now()}_${i}`;
+        const path = `${userId}/${listing.id}/${Date.now()}_${i}`;
         const { error: uploadError } = await supabase.storage
           .from("listing-images")
           .upload(path, img.file, { contentType: img.file.type });

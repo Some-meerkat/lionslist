@@ -17,7 +17,7 @@ const URGENCY_COLORS = {
 
 export default function LionHuntPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, session } = useAuth();
   const [hunts, setHunts] = useState([]);
   const [profiles, setProfiles] = useState({});
   const [responseCounts, setResponseCounts] = useState({});
@@ -116,6 +116,7 @@ export default function LionHuntPage() {
         {showCreate && (
           <CreateHuntForm
             profile={profile}
+            session={session}
             onDone={() => {
               setShowCreate(false);
               fetchHunts();
@@ -261,7 +262,8 @@ export default function LionHuntPage() {
   );
 }
 
-function CreateHuntForm({ profile, onDone, onCancel }) {
+function CreateHuntForm({ profile, session, onDone, onCancel }) {
+  const userId = profile?.id || session?.user?.id;
   const [form, setForm] = useState({
     title: "",
     category: CATEGORIES[0].name,
@@ -285,8 +287,8 @@ function CreateHuntForm({ profile, onDone, onCancel }) {
       return;
     }
 
-    if (!profile?.id) {
-      alert("Please wait — your profile is still loading. Try again in a moment.");
+    if (!userId) {
+      alert("Something went wrong. Please refresh and try again.");
       return;
     }
 
@@ -298,7 +300,7 @@ function CreateHuntForm({ profile, onDone, onCancel }) {
         description: form.description.trim() || null,
         budget_max: form.budgetMax ? Number(form.budgetMax) : null,
         urgency: form.urgency,
-        requester_id: profile.id,
+        requester_id: userId,
       });
       if (error) throw error;
       onDone();

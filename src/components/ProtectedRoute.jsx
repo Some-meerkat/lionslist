@@ -2,9 +2,9 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 export default function ProtectedRoute({ children }) {
-  const { session, loading } = useAuth();
+  const { session, profile, loading } = useAuth();
 
-  if (loading) {
+  if (loading || (session && profile === undefined)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
